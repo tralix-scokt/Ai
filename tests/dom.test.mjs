@@ -344,6 +344,75 @@ $('#scrim').dispatchEvent(new window.Event('click', { bubbles: true }));
 await flush(320);
 t('drawer closes and releases the lock', !$('#app').classList.contains('drawer-open') && (await lockCount()) === 0);
 
+/*
+ * The exact mobile regression this project had to fix: after a drawer or sheet
+ * closes, the page must be scrollable again. If body overflow stays 'hidden',
+ * an iPhone user is stuck on a frozen conversation.
+ */
+t('body scrolling is restored after the drawer closes',
+  document.body.style.overflow === '' || document.body.style.overflow === 'visible',
+  JSON.stringify(document.body.style.overflow));
+t('overscroll containment is released too',
+  !document.body.style.overscrollBehavior || document.body.style.overscrollBehavior === '',
+  JSON.stringify(document.body.style.overscrollBehavior));
+/*
+ * jsdom does not apply external stylesheets, so the scroll contract is checked
+ * against the CSS text itself — which is where the real regression lived.
+ */
+const css = readFileSync(new URL('../assets/app.css', import.meta.url), 'utf8');
+const ruleFor = (selector) => {
+  const match = css.match(new RegExp(`(^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'm'));
+  return match ? match[2] : '';
+};
+const appRule = ruleFor('.app');
+const chatRule = ruleFor('.chat');
+
+t('the app frame never scrolls (children do)', /overflow:\s*hidden/.test(appRule), appRule.trim().slice(0, 60));
+t('the app frame is sized to the visual viewport',
+  /--vvh/.test(appRule) && /100dvh/.test(appRule), appRule.trim().slice(0, 90));
+t('the conversation pane is the scroll container',
+  /overflow-y:\s*auto/.test(chatRule), chatRule.trim().slice(0, 60));
+t('the conversation pane gets momentum scrolling on iOS',
+  /-webkit-overflow-scrolling:\s*touch/.test(chatRule), chatRule.trim().slice(0, 90));
+t('no stylesheet rule locks the document body',
+  !/^\s*body\s*\{[^}]*overflow:\s*hidden/m.test(css),
+  'body { overflow: hidden } found in app.css');
+
+// Open and close a sheet as well: the same guarantee must hold for both layers.
+$('#btnSettings').dispatchEvent(new window.Event('click', { bubbles: true }));
+await flush(60);
+t('a sheet locks scrolling while it is open', document.body.style.overflow === 'hidden',
+  JSON.stringify(document.body.style.overflow));
+$('#settingsSheet .icon-btn[data-close]').dispatchEvent(new window.Event('click', { bubbles: true }));
+await flush(400);
+t('body scrolling is restored after a sheet closes', document.body.style.overflow === '',
+  JSON.stringify(document.body.style.overflow));
+
+// Nesting: two overlays open, one closes — the page stays locked until the last.
+$('#btnSettings').dispatchEvent(new window.Event('click', { bubbles: true }));
+await flush(60);
+$('#btnMemory').dispatchEvent(new window.Event('click', { bubbles: true }));
+await flush(80);
+t('two overlays can be open at once', !$('#memorySheet').hidden && !$('#settingsSheet').hidden);
+const nestedCount = await lockCount();
+t('the lock is reference counted across overlays', nestedCount === 2, String(nestedCount));
+t('the document style is applied once, not per overlay',
+  document.body.style.overflow === 'hidden', JSON.stringify(document.body.style.overflow));
+
+$('#memorySheet .icon-btn[data-close]').dispatchEvent(new window.Event('click', { bubbles: true }));
+await flush(320);
+t('the lock survives the first of two closes', (await lockCount()) > 0, String(await lockCount()));
+t('the page is still locked while one overlay remains', document.body.style.overflow === 'hidden',
+  JSON.stringify(document.body.style.overflow));
+
+$('#settingsSheet .icon-btn[data-close]').dispatchEvent(new window.Event('click', { bubbles: true }));
+await flush(400);
+t('the page is scrollable again after the last overlay closes',
+  (await lockCount()) === 0 && document.body.style.overflow === '',
+  `count=${await lockCount()} overflow=${JSON.stringify(document.body.style.overflow)}`);
+t('the conversation pane rule is unchanged after all of that',
+  /overflow-y:\s*auto/.test(ruleFor('.chat')));
+
 console.log('\n— search, projects, memory —');
 $('#btnSearch').dispatchEvent(new window.Event('click', { bubbles: true }));
 await flush(40);
