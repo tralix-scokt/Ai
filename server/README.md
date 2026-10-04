@@ -80,12 +80,40 @@ npx wrangler deploy worker.js --name tralix-backend \
 npx wrangler secret put OPENAI_API_KEY
 ```
 
-### Option C — your own server (Render, Railway, Fly, a VPS)
+### Option C — Render (one-click)
+
+1. In Render: **New → Web Service**, pick this repo.
+2. **Build Command:** leave blank (no build step needed).
+   **Start Command:** `node server/node.js`
+3. **Environment Variables:**
+   - `OPENAI_API_KEY` = your key
+   - `TRALIX_ALLOWED_ORIGINS` = `https://tralix-scokt.github.io` (or your custom domain)
+4. Wait for the build. Render prints a URL like `https://tralix-backend-xxxx.onrender.com`.
+5. Check: `curl -s "https://tralix-backend-xxxx.onrender.com/api/health?probe=1"` → `"ok":true,"verified":true`.
+
+Notes for Render:
+- The free tier **spins down after 15 min idle**; the first request after that takes
+  ~30s, which the frontend will show as "checking…" and then recover. Use at least
+  the **Starter** plan for production.
+- Set the **Health Check Path** to `/api/health?probe=1`.
+- The service only runs the backend; the frontend stays on GitHub Pages. That is
+  intentional — it is the architecture the brief requires (secret on the server).
+  Do not run with `--static` on Render, GitHub Pages already serves the UI.
+
+### Option D — Railway / Fly / any Node 18+ host
+
+Start command: `node server/node.js`, set the same two env vars. The repo has a
+`railway.json` for convenience.
+
+### Option E — a VPS you control
 
 ```bash
 OPENAI_API_KEY=… TRALIX_ALLOWED_ORIGINS=https://tralix-scokt.github.io \
-  node server/node.js --static
+  node server/node.js
 ```
+
+Bind behind nginx/Caddy with HTTPS; keep port 8787 internal. Use `--static` only
+if you want the same host to serve the app too (not required).
 
 ## 3. Point the frontend at it
 
