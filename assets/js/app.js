@@ -13,6 +13,7 @@ import { renderMarkdown, stripMarkdown } from './markdown.js';
 import * as Store from './store.js';
 import * as AI from './providers.js';
 import * as Voice from './voice.js';
+import { isNearBottom, bindVisualViewport } from './scrolling.js';
 
 /* ================================ state ================================== */
 const state = {
@@ -276,8 +277,7 @@ function updateMemCount() {
 
 /* ------------------------------ scroll utils ----------------------------- */
 function nearBottom(slack = 120) {
-  const c = el.chatScroll;
-  return c.scrollHeight - c.scrollTop - c.clientHeight < slack;
+  return isNearBottom(el.chatScroll, slack);
 }
 
 function scrollToBottom(instant = false) {
@@ -1086,42 +1086,23 @@ function init() {
   document.addEventListener('pointerdown', unlockVoices, { once: true });
   Voice.loadVoices();
 
-  /* iOS keyboard handling.
-     Safari does not shrink the layout viewport when the keyboard opens, so a
-     fixed, full-height app ends up hidden behind it. Pinning the app to the
-     visual viewport is the only reliable fix on iPhone. */
-  const appEl = $('#app');
-  if (window.visualViewport) {
-    const vv = window.visualViewport;
-    let lastH = vv.height;
-
-    const fit = () => {
-      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      document.documentElement.style.setProperty('--kb', `${kb}px`);
-
-      appEl.style.height = `${vv.height}px`;
-      appEl.style.transform = vv.offsetTop ? `translateY(${vv.offsetTop}px)` : '';
-
-      const keyboardJustOpened = kb > 120 && lastH - vv.height > 120;
-      lastH = vv.height;
-
-      if (keyboardJustOpened || document.activeElement === el.input) {
-        requestAnimationFrame(() => scrollToBottom(true));
-      }
-    };
-
-    vv.addEventListener('resize', fit);
-    vv.addEventListener('scroll', fit);
-    fit();
-  }
+  // iOS Safari keeps the layout viewport tall when its software keyboard opens.
+  // Fit the app to the visual viewport while preserving the reader's scroll position.
+  bindVisualViewport({
+    app: $('#app'),
+    chat: el.chatScroll,
+    visualViewport: window.visualViewport,
+    scrollToBottom,
+  });
 
   // unlock speech on the first touch anywhere (required by iOS)
   document.addEventListener('pointerdown', () => Voice.warmupSpeech(), { once: true });
 
-  // tapping the chat dismisses the keyboard
-  el.chatScroll.addEventListener('touchstart', () => {
+  // A tap in the history dismisses the keyboard; a swipe keeps it open so the
+  // chat can still scroll while the user is reading older messages.
+  el.chatScroll.addEventListener('click', () => {
     if (document.activeElement === el.input) el.input.blur();
-  }, { passive: true });
+  });
 
   // block pull-to-refresh inside the app
   document.addEventListener('touchmove', (e) => {

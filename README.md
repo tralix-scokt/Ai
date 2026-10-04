@@ -178,6 +178,7 @@ assets/js/store.js         all localStorage persistence
 assets/js/markdown.js      dependency-free markdown renderer (XSS-safe)
 assets/js/providers.js     Gemini client + streaming + prompt building
 assets/js/voice.js         Speech Recognition & Synthesis for iOS
+assets/js/scrolling.js     chat scroll + visual viewport keyboard handling
 assets/js/app.js           UI state, chat flow, wiring
 icons/                     generated app icons
 ```

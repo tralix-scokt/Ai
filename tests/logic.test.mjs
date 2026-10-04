@@ -1,10 +1,11 @@
 /* ==========================================================================
    logic.test.mjs — run with:  node tests/logic.test.mjs
-   Covers the pure logic: markdown rendering, memory extraction, prompt build.
+   Covers markdown, memory, prompt, and chat scroll/viewport logic.
    No dependencies, no test framework.
    ========================================================================== */
 
 import { renderMarkdown, stripMarkdown } from '../assets/js/markdown.js';
+import { isNearBottom, bindVisualViewport } from '../assets/js/scrolling.js';
 import { extractMemoryCandidates, buildSystemPrompt, MODELS, bestAvailableModel, setAvailableModels } from '../assets/js/providers.js';
 
 let pass = 0, fail = 0;
@@ -76,6 +77,60 @@ setAvailableModels(null);
 t('with no probe data, leaves the choice alone',
   bestAvailableModel('gemini-2.5-pro') === 'gemini-2.5-pro', '');
 t('curated list is non-empty', MODELS.length > 0, '');
+
+console.log('\n— chat scrolling —');
+const chatScroller = { scrollHeight: 900, scrollTop: 600, clientHeight: 300 };
+t('detects a chat already at the bottom', isNearBottom(chatScroller), '');
+chatScroller.scrollTop = 400;
+t('does not treat an older-message position as the bottom', !isNearBottom(chatScroller), '');
+chatScroller.scrollTop = 600;
+
+function mockVisualViewport(height, offsetTop = 0) {
+  const listeners = new Map();
+  return {
+    height,
+    offsetTop,
+    addEventListener(type, listener) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(listener);
+    },
+    removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+    emit(type) { for (const listener of listeners.get(type) || []) listener(); },
+    listenerCount(type) { return listeners.get(type)?.size || 0; },
+  };
+}
+
+const visualViewport = mockVisualViewport(800);
+const appStyle = {};
+const scheduledFrames = [];
+const bottomScrolls = [];
+const unbindViewport = bindVisualViewport({
+  app: { style: appStyle },
+  chat: chatScroller,
+  visualViewport,
+  scrollToBottom: (instant) => bottomScrolls.push(instant),
+  scheduleFrame: (callback) => scheduledFrames.push(callback),
+});
+t('fits the app to the initial visual viewport', appStyle.height === '800px', appStyle.height);
+t('initial viewport fit does not cause an unnecessary scroll', scheduledFrames.length === 0, '');
+visualViewport.height = 520;
+visualViewport.emit('resize');
+t('resizes the app when the keyboard reduces the visual viewport', appStyle.height === '520px', appStyle.height);
+t('schedules a bottom correction when the reader was following the latest reply', scheduledFrames.length === 1, '');
+scheduledFrames.shift()();
+t('uses an instant correction after viewport resize', bottomScrolls.length === 1 && bottomScrolls[0] === true, '');
+
+chatScroller.scrollTop = 100;
+visualViewport.height = 800;
+visualViewport.emit('resize');
+t('does not force the reader back to the bottom after resizing', scheduledFrames.length === 0, '');
+visualViewport.offsetTop = 18;
+visualViewport.emit('scroll');
+t('tracks a shifted visual viewport', appStyle.transform === 'translateY(18px)', appStyle.transform);
+t('does not interrupt an upward-reading position when the viewport shifts', scheduledFrames.length === 0, '');
+unbindViewport();
+t('removes visual viewport listeners on cleanup',
+  visualViewport.listenerCount('resize') === 0 && visualViewport.listenerCount('scroll') === 0, '');
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
