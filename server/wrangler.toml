@@ -1,0 +1,22 @@
+# Cloudflare Worker deployment for the TRALIX backend.
+#
+#   npx wrangler deploy server/worker.js --name tralix-backend
+#   npx wrangler secret put OPENAI_API_KEY
+#
+# Then paste the worker URL into TRALIX → Settings → Advanced → Backend URL
+# (or Connect sheet → Backend URL).
+
+name = "tralix-backend"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+
+[vars]
+TRALIX_ALLOWED_ORIGINS = "*"
+TRALIX_ENABLE_WEB_SEARCH = "false"
+
+# Secrets (set with `wrangler secret put`, never in this file):
+#   OPENAI_API_KEY
+#
+# Optional overrides:
+# [vars]
+# TRALIX_MODEL_SMART = "gpt-5"

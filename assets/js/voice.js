@@ -1,13 +1,36 @@
 /* ==========================================================================
-   voice.js — speech in and speech out
-   Built around iOS Safari: webkitSpeechRecognition for input,
-   speechSynthesis for output. Handles the iOS quirks explicitly.
+   voice.js — speech in and speech out.
+
+   Built around iOS Safari: webkitSpeechRecognition for input, speechSynthesis
+   for output. Long replies are spoken in sentence-sized chunks because iOS
+   truncates very long utterances, and the module reports state changes so the
+   UI can show a calm Listening / Thinking / Speaking indicator.
    ========================================================================== */
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
 export const sttSupported = Boolean(SR);
 export const ttsSupported = 'speechSynthesis' in window;
+
+/* ------------------------------ speaking state ---------------------------- */
+/** @type {'idle'|'listening'|'thinking'|'generating'|'speaking'|'error'} */
+let voiceState = 'idle';
+const stateListeners = new Set();
+
+export function onVoiceState(fn) {
+  stateListeners.add(fn);
+  return () => stateListeners.delete(fn);
+}
+
+function setVoiceState(next) {
+  if (voiceState === next) return;
+  voiceState = next;
+  for (const fn of stateListeners) {
+    try { fn(next); } catch { /* listener errors must not break speech */ }
+  }
+}
+
+export const getVoiceState = () => voiceState;
 
 /* ================================== STT =================================== */
 export class Listener {
@@ -16,7 +39,7 @@ export class Listener {
    * @param {(text:string, isFinal:boolean)=>void} opts.onResult
    * @param {(msg:string)=>void} opts.onError
    * @param {()=>void} opts.onStart
-   * @param {()=>void} opts.onEnd
+   * @param {(text:string)=>void} opts.onEnd
    */
   constructor({ onResult, onError, onStart, onEnd } = {}) {
     this.onResult = onResult || (() => {});
@@ -53,12 +76,13 @@ export class Listener {
 
     rec.lang = navigator.language || 'en-US';
     rec.interimResults = true;
-    rec.continuous = true;          // we manage chunked restarts ourselves
+    rec.continuous = true;          // chunked restarts are managed here
     rec.maxAlternatives = 1;
 
     rec.onstart = () => {
       this.active = true;
       this.restarting = false;
+      setVoiceState('listening');
       this.onStart();
     };
 
@@ -80,6 +104,7 @@ export class Listener {
       if (code === 'no-speech' || code === 'aborted') return;
 
       this.active = false;
+      setVoiceState('error');
 
       const messages = {
         'not-allowed':    'Microphone access is blocked. On iPhone: Settings → Safari → Microphone, then reload.',
@@ -92,8 +117,8 @@ export class Listener {
     };
 
     rec.onend = () => {
-      // iOS cuts recognition off every few seconds — restart if the user
-      // is still holding the button, otherwise finish cleanly.
+      // iOS cuts recognition off every few seconds — restart while the user is
+      // still holding the button, otherwise finish cleanly.
       if (!this.manualStop && this.active) {
         this.restarting = true;
         try { rec.start(); } catch { this.active = false; this._finish(); }
@@ -111,9 +136,10 @@ export class Listener {
   }
 
   _finish() {
-    if (this._emitted) return;        // rec.onend and stop() can both land here
+    if (this._emitted) return;        // onend and stop() can both land here
     this._emitted = true;
     const text = this.finalText.trim();
+    if (voiceState === 'listening') setVoiceState('idle');
     this.onResult(text, true);
     this.onEnd(text);
   }
@@ -122,7 +148,7 @@ export class Listener {
     this.manualStop = true;
     this.active = false;
     try { this.rec?.stop(); } catch {}
-    this._finish();                   // no-op if onend already fired
+    this._finish();
     return this.finalText.trim();
   }
 
@@ -130,6 +156,7 @@ export class Listener {
     this.manualStop = true;
     this.active = false;
     try { this.rec?.abort(); } catch {}
+    if (voiceState === 'listening') setVoiceState('idle');
   }
 }
 
@@ -137,9 +164,12 @@ export class Listener {
 const tts = {
   voices: [],
   loaded: false,
+  queue: [],
+  speaking: false,
+  cancelled: false,
 };
 
-/** iOS loads voices asynchronously — this fires after they arrive. */
+/** iOS loads voices asynchronously — this resolves once they arrive. */
 export function loadVoices() {
   return new Promise(resolve => {
     if (!ttsSupported) return resolve([]);
@@ -183,25 +213,21 @@ export function pickDefaultVoice() {
     const hit = pool.find(x => re.test(x.name));
     if (hit) return hit;
   }
-  // then any local (offline-capable) voice — most reliable on iPhone
   return pool.find(x => x.localService) || pool[0];
 }
 
 export function voiceList() {
-  return tts.voices
-    .filter(v => /^en/i.test(v.lang) || true)   // keep all, English first
-    .sort((a, b) => {
-      const aEn = /^en/i.test(a.lang) ? 0 : 1;
-      const bEn = /^en/i.test(b.lang) ? 0 : 1;
-      return aEn - bEn || a.name.localeCompare(b.name);
-    });
+  return [...tts.voices].sort((a, b) => {
+    const aEn = /^en/i.test(a.lang) ? 0 : 1;
+    const bEn = /^en/i.test(b.lang) ? 0 : 1;
+    return aEn - bEn || a.name.localeCompare(b.name);
+  });
 }
 
-let speaking = false;
 let unlocked = false;
 
 /**
- * iOS only allows speech to start once the page has been touched.
+ * iOS only allows speech to start after a user gesture.
  * Speaking a silent utterance on the first tap unlocks it for later.
  */
 export function warmupSpeech() {
@@ -215,37 +241,81 @@ export function warmupSpeech() {
   } catch {}
 }
 
-/**
- * Speak text aloud.
- * @param {string} text
- * @param {{voiceURI?:string, rate?:number, onStart?:Function, onEnd?:Function}} opts
- */
-export function speak(text, { voiceURI = '', rate = 1, onStart, onEnd } = {}) {
-  if (!ttsSupported) { onEnd?.(); return; }
+/** Split long text into speakable chunks at sentence boundaries. */
+export function chunkText(text = '', max = 220) {
+  const clean = String(text).replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  if (clean.length <= max) return [clean];
 
-  const clean = String(text).trim();
-  if (!clean) { onEnd?.(); return; }
+  const sentences = clean.match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) || [clean];
+  const chunks = [];
+  let current = '';
+  for (const sentence of sentences) {
+    const s = sentence.trim();
+    if (!s) continue;
+    if ((current + ' ' + s).trim().length <= max) {
+      current = (current ? current + ' ' : '') + s;
+    } else {
+      if (current) chunks.push(current);
+      if (s.length > max) {
+        for (let i = 0; i < s.length; i += max) chunks.push(s.slice(i, i + max));
+        current = '';
+      } else {
+        current = s;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * Speak a reply aloud.
+ * @param {string} text
+ * @param {{voiceURI?:string, rate?:number, pitch?:number, onStart?:Function, onEnd?:Function, onStateChange?:Function}} opts
+ */
+export function speak(text, { voiceURI = '', rate = 1, pitch = 1, onStart, onEnd } = {}) {
+  if (!ttsSupported) { onEnd?.(); return; }
+  const chunks = chunkText(text);
+  if (!chunks.length) { onEnd?.(); return; }
 
   stopSpeaking();
-
-  const u = new SpeechSynthesisUtterance(clean);
-  u.rate = rate;
-  u.pitch = 1;
-  u.volume = 1;
-  u.lang = 'en-US';
-
+  tts.cancelled = false;
+  tts.queue = chunks.slice();
   const chosen = tts.voices.find(v => v.voiceURI === voiceURI) || pickDefaultVoice();
-  if (chosen) { u.voice = chosen; u.lang = chosen.lang; }
 
-  u.onstart = () => { speaking = true; onStart?.(); };
-  u.onend   = () => { speaking = false; onEnd?.(); };
-  u.onerror = () => { speaking = false; onEnd?.(); };
+  const speakNext = () => {
+    if (tts.cancelled) { finish(); return; }
+    const next = tts.queue.shift();
+    if (!next) { finish(); return; }
 
-  // iOS: the first speak() must come from a user gesture, and it silently
-  // fails if a previous utterance is still queued — hence the resume below.
+    const u = new SpeechSynthesisUtterance(next);
+    u.rate = Math.min(2, Math.max(0.5, Number(rate) || 1));
+    u.pitch = Math.min(2, Math.max(0.5, Number(pitch) || 1));
+    u.volume = 1;
+    u.lang = chosen?.lang || 'en-US';
+    if (chosen) u.voice = chosen;
+
+    u.onstart = () => { tts.speaking = true; setVoiceState('speaking'); onStart?.(); };
+    u.onend = () => speakNext();
+    u.onerror = () => speakNext();
+
+    try {
+      window.speechSynthesis.speak(u);
+    } catch {
+      finish();
+    }
+  };
+
+  const finish = () => {
+    tts.speaking = false;
+    if (voiceState === 'speaking') setVoiceState('idle');
+    onEnd?.();
+  };
+
   try {
     window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
+    speakNext();
     // Safari sometimes pauses itself after ~15s of speech
     setTimeout(() => {
       if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
@@ -253,15 +323,43 @@ export function speak(text, { voiceURI = '', rate = 1, onStart, onEnd } = {}) {
       }
     }, 300);
   } catch {
-    speaking = false;
-    onEnd?.();
+    finish();
   }
 }
 
-export function stopSpeaking() {
-  if (!ttsSupported) return;
-  try { window.speechSynthesis.cancel(); } catch {}
-  speaking = false;
+export function pauseSpeaking() {
+  if (!ttsSupported) return false;
+  try {
+    if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+      window.speechSynthesis.pause();
+      return true;
+    }
+  } catch {}
+  return false;
 }
 
-export const isSpeaking = () => speaking;
+export function resumeSpeaking() {
+  if (!ttsSupported) return false;
+  try {
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+export function stopSpeaking() {
+  tts.cancelled = true;
+  tts.queue = [];
+  if (!ttsSupported) return;
+  try { window.speechSynthesis.cancel(); } catch {}
+  tts.speaking = false;
+  if (voiceState === 'speaking') setVoiceState('idle');
+}
+
+export const isSpeaking = () => tts.speaking;
+
+/** Approximate duration of spoken text, for a progress hint. */
+export const estimatedSpeechSeconds = (text = '', rate = 1) =>
+  Math.max(1, Math.round((String(text).split(/\s+/).filter(Boolean).length / 2.6) / (Number(rate) || 1)));

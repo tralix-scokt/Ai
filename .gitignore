@@ -1,3 +1,10 @@
 node_modules/
+node_modules
 .env
 .DS_Store
+
+# TRALIX upgrade additions
+.env.local
+.env.*.local
+*.log
+.wrangler/

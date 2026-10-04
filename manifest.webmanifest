@@ -1,28 +1,35 @@
 {
-  "name": "Jarvis — Personal AI Assistant",
-  "short_name": "Jarvis",
-  "description": "A personal AI assistant with memory and voice. Talk to it, it remembers you.",
+  "name": "TRALIX AI — Intelligent AI Assistant",
+  "short_name": "TRALIX AI",
+  "description": "TRALIX AI is a personal AI assistant with memory, voice and a secure OpenAI-powered backend.",
   "id": "/Ai/",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["standalone", "fullscreen", "minimal-ui"],
-  "orientation": "portrait",
-  "background_color": "#0d0e10",
-  "theme_color": "#0d0e10",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0a0b0f",
+  "theme_color": "#0a0b0f",
   "categories": ["productivity", "utilities"],
   "lang": "en",
   "dir": "ltr",
   "icons": [
     { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
   ],
   "shortcuts": [
     {
       "name": "New chat",
       "short_name": "New chat",
       "url": "./index.html?new=1",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Search conversations",
+      "short_name": "Search",
+      "url": "./index.html?search=1",
       "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
     }
   ]

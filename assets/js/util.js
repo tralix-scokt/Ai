@@ -1,5 +1,6 @@
 /* ==========================================================================
-   util.js — small shared helpers
+   util.js — small shared helpers (pure + tiny DOM utilities).
+   No app state lives here; anything stateful belongs in its own module.
    ========================================================================== */
 
 export const $  = (sel, root = document) => root.querySelector(sel);
@@ -26,7 +27,7 @@ export function safeUrl(url = '') {
   return '#';
 }
 
-export function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
+export const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
 
 /** "3m ago" / "Yesterday" style relative time, iPhone-ish. */
 export function relTime(ts) {
@@ -47,13 +48,23 @@ export function relTime(ts) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-/** Day bucket used for the chat dividers. */
+export function formatDateTime(ts) {
+  if (!ts) return '';
+  try {
+    return new Date(ts).toLocaleString([], {
+      day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+  } catch { return ''; }
+}
+
+/** Day bucket used for chat dividers and the sidebar's chat groups. */
 export function dayBucket(ts) {
   const d = new Date(ts), now = new Date();
   if (d.toDateString() === now.toDateString()) return 'Today';
   const y = new Date(now); y.setDate(now.getDate() - 1);
   if (d.toDateString() === y.toDateString()) return 'Yesterday';
   if ((now - d) < 86400 * 7 * 1000) return 'Previous 7 days';
+  if ((now - d) < 86400 * 30 * 1000) return 'Previous 30 days';
   return 'Older';
 }
 
@@ -69,12 +80,33 @@ export function greeting() {
 /** Yield to the browser so streaming stays smooth. */
 export const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
 
+export const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 export function haptic(ms = 8) {
   try { navigator.vibrate?.(ms); } catch {}
 }
 
+export function debounce(fn, ms = 150) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
 /** Rough token-ish estimate so we can show context pressure. */
 export const estimateTokens = (text = '') => Math.ceil(String(text).length / 4);
+
+export function formatBytes(bytes = 0) {
+  const b = Number(bytes) || 0;
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function plural(n, one, many = `${one}s`) {
+  return `${n} ${n === 1 ? one : many}`;
+}
 
 /* ------------------------------- clipboard ------------------------------- */
 export async function copyText(text) {
@@ -99,50 +131,27 @@ export async function copyText(text) {
   } catch { return false; }
 }
 
-/* --------------------------------- toast --------------------------------- */
-let toastTimer = null;
-export function toast(msg, ms = 2000) {
-  const el = document.getElementById('toast');
-  const txt = document.getElementById('toastText');
-  if (!el || !txt) return;
-  txt.textContent = msg;
-  el.hidden = false;
-  el.style.animation = 'none';
-  void el.offsetWidth;                 // reflow to restart the animation
-  el.style.animation = '';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, ms);
-}
-
-/* -------------------------------- confirm -------------------------------- */
-export function confirmDialog(title, body, yesLabel = 'Yes') {
-  return new Promise(resolve => {
-    const back = document.getElementById('confirmSheet');
-    const t = document.getElementById('confirmTitle');
-    const b = document.getElementById('confirmBody');
-    const yes = document.getElementById('confirmYes');
-    const no  = document.getElementById('confirmNo');
-
-    t.textContent = title;
-    b.textContent = body;
-    yes.textContent = yesLabel;
-    back.hidden = false;
-    requestAnimationFrame(() => back.classList.add('on'));
-
-    const done = (val) => {
-      back.classList.remove('on');
-      setTimeout(() => { back.hidden = true; }, 280);
-      yes.onclick = no.onclick = back.onclick = null;
-      resolve(val);
-    };
-    yes.onclick = () => done(true);
-    no.onclick  = () => done(false);
-    back.onclick = (e) => { if (e.target === back) done(false); };
-  });
+/* -------------------------------- downloads ------------------------------- */
+export function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 /** Autosize a textarea to its content, capped by CSS max-height. */
-export function autosize(ta) {
+export function autosize(ta, maxPx) {
+  if (!ta) return;
+  const cap = maxPx || Math.min(Math.round(window.innerHeight * 0.42), 260);
   ta.style.height = 'auto';
-  ta.style.height = Math.min(ta.scrollHeight, window.innerHeight * 0.4) + 'px';
+  ta.style.height = `${Math.min(ta.scrollHeight, cap)}px`;
 }
+
+/** prefers-reduced-motion, read live. */
+export const prefersReducedMotion = () =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
