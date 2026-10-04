@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Jarvis</title>
+<meta name="description" content="A personal AI assistant with memory and voice.">
+
+<!-- iPhone / PWA -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="dark light">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Jarvis">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./assets/app.css">
+</head>
+
+<body>
+<!-- ============ APP FRAME ============ -->
+<div class="app" id="app">
+
+  <!-- ---------- TOP BAR ---------- -->
+  <header class="topbar" id="topbar">
+    <button class="icon-btn" id="btnMenu" aria-label="Menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+
+    <button class="model-chip" id="btnModel" aria-label="Choose model">
+      <span class="chip-dot" id="chipDot"></span>
+      <span class="chip-label" id="chipLabel">Gemini</span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+
+    <button class="icon-btn" id="btnNewChat" aria-label="New chat">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </header>
+
+  <!-- ---------- DRAWER ---------- -->
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div class="brand">
+        <span class="brand-mark"><span class="orb"></span></span>
+        <div class="brand-text">
+          <strong>Jarvis</strong>
+          <small id="brandSub">Personal assistant</small>
+        </div>
+      </div>
+      <button class="icon-btn ghost" id="btnCloseDrawer" aria-label="Close menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <button class="new-chat-btn" id="btnNewChat2">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      New chat
+    </button>
+
+    <div class="drawer-search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" id="chatSearch" placeholder="Search chats" autocomplete="off">
+    </div>
+
+    <nav class="drawer-scroll">
+      <div class="drawer-section-label" id="historyLabel">Recent</div>
+      <div id="chatList" class="chat-list"></div>
+    </nav>
+
+    <div class="drawer-foot">
+      <button class="drawer-item" id="btnMemory">
+        <span class="di-icon">🧠</span>
+        <span class="di-text"><strong>Memory</strong><small id="memCount">0 things remembered</small></span>
+      </button>
+      <button class="drawer-item" id="btnSettings">
+        <span class="di-icon">⚙️</span>
+        <span class="di-text"><strong>Settings</strong><small>API key, voice, personality</small></span>
+      </button>
+      <button class="drawer-item" id="btnTheme">
+        <span class="di-icon" id="themeIcon">🌙</span>
+        <span class="di-text"><strong>Appearance</strong><small id="themeSub">Dark</small></span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ---------- CHAT AREA ---------- -->
+  <main class="chat" id="chatScroll">
+
+    <!-- Empty / welcome state -->
+    <section class="welcome" id="welcome">
+      <div class="welcome-orb"><span class="orb big"></span></div>
+      <h1 class="welcome-title" id="welcomeTitle">Good evening</h1>
+      <p class="welcome-sub" id="welcomeSub">What are we working on today?</p>
+
+      <div class="suggest-grid" id="suggestGrid">
+        <button class="suggest" data-prompt="Remember that my name is ">
+          <span class="s-icon">👤</span><span class="s-label">Get to know me</span>
+          <span class="s-sub">Remember my name &amp; preferences</span>
+        </button>
+        <button class="suggest" data-prompt="Plan my day. Here's what's going on: ">
+          <span class="s-icon">🗓️</span><span class="s-label">Plan my day</span>
+          <span class="s-sub">Sort my tasks by priority</span>
+        </button>
+        <button class="suggest" data-prompt="Explain something simply: ">
+          <span class="s-icon">💡</span><span class="s-label">Explain something</span>
+          <span class="s-sub">Break a hard idea into plain words</span>
+        </button>
+        <button class="suggest" data-prompt="Help me build: ">
+          <span class="s-icon">🛠️</span><span class="s-label">Help me build</span>
+          <span class="s-sub">Think through a project with me</span>
+        </button>
+      </div>
+
+      <div class="welcome-hint" id="welcomeHint" hidden>
+        <strong>One quick step.</strong> Add your Google Gemini API key in
+        <button class="link-btn" id="welcomeSettingsBtn">Settings</button> to wake me up.
+        It's free — <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+      </div>
+    </section>
+
+    <!-- Messages render here -->
+    <div class="messages" id="messages" role="log" aria-live="polite"></div>
+    <div class="scroll-anchor" id="scrollAnchor"></div>
+  </main>
+
+  <!-- Jump-to-bottom -->
+  <button class="jump-btn" id="jumpBtn" hidden aria-label="Scroll to latest">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+  </button>
+
+  <!-- ---------- COMPOSER ---------- -->
+  <div class="composer-wrap" id="composerWrap">
+    <div class="listen-bar" id="listenBar" hidden>
+      <span class="pulse"></span>
+      <span class="listen-text" id="listenText">Listening…</span>
+      <span class="listen-hint" id="listenHint">release the mic to send</span>
+    </div>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <textarea id="input" rows="1" placeholder="Message Jarvis…"
+                enterkeyhint="send" autocapitalize="sentences" spellcheck="true"></textarea>
+
+      <div class="composer-actions">
+        <button type="button" class="round-btn" id="btnClear" hidden aria-label="Clear">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+
+        <button type="button" class="round-btn mic" id="btnMic" aria-label="Hold to talk">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="11" rx="3"/>
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+          </svg>
+        </button>
+
+        <button type="submit" class="round-btn send" id="btnSend" aria-label="Send" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+
+        <button type="button" class="round-btn stop" id="btnStop" hidden aria-label="Stop">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+        </button>
+      </div>
+    </form>
+
+    <p class="composer-foot" id="composerFoot">Jarvis can make mistakes. Check important info.</p>
+  </div>
+</div>
+
+<!-- ============ SHEET: MODEL PICKER ============ -->
+<div class="sheet-backdrop" id="modelSheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Choose model">
+    <div class="sheet-grip"></div>
+    <h2 class="sheet-title">Choose a model</h2>
+    <div class="sheet-body" id="modelList"></div>
+  </div>
+</div>
+
+<!-- ============ SHEET: SETTINGS ============ -->
+<div class="sheet-backdrop" id="settingsSheet" hidden>
+  <div class="sheet tall" role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="sheet-grip"></div>
+    <div class="sheet-head">
+      <h2 class="sheet-title">Settings</h2>
+      <button class="icon-btn ghost" id="btnCloseSettings" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="sheet-body">
+
+      <!-- API KEY -->
+      <section class="set-block">
+        <h3 class="set-h">Your Gemini API key</h3>
+        <p class="set-p">Stored only on this device. It is never sent anywhere except Google.</p>
+        <div class="key-row">
+          <input type="password" id="apiKeyInput" placeholder="Paste key (starts with AIza…)"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <button type="button" class="mini-btn" id="btnEye" aria-label="Show key">👁</button>
+        </div>
+        <div class="key-actions">
+          <button class="mini-btn wide" id="btnSaveKey">Save key</button>
+          <button class="mini-btn wide ghost" id="btnTestKey">Test</button>
+          <button class="mini-btn wide ghost" id="btnGetKey">Get a free key ↗</button>
+        </div>
+        <div class="status-line" id="keyStatus"></div>
+      </section>
+
+      <!-- PERSONALITY -->
+      <section class="set-block">
+        <h3 class="set-h">Personality</h3>
+        <p class="set-p">How Jarvis talks to you.</p>
+        <textarea id="personaInput" class="set-textarea" rows="4"
+          placeholder="e.g. Call me Tralix. Be warm, direct and a little witty. Skip the fluff."></textarea>
+        <div class="chips-row" id="personaPresets">
+          <button class="chip" data-persona="warm">Warm &amp; friendly</button>
+          <button class="chip" data-persona="concise">Short &amp; sharp</button>
+          <button class="chip" data-persona="butler">Classic Jarvis butler</button>
+          <button class="chip" data-persona="coach">Coach &amp; cheerleader</button>
+        </div>
+      </section>
+
+      <!-- VOICE -->
+      <section class="set-block">
+        <h3 class="set-h">Voice</h3>
+        <label class="toggle-row">
+          <span><strong>Speak replies out loud</strong><small>Jarvis reads answers to you</small></span>
+          <input type="checkbox" id="ttsToggle" class="switch">
+        </label>
+        <label class="toggle-row">
+          <span><strong>Auto-speak every reply</strong><small>Otherwise tap 🔊 on a message</small></span>
+          <input type="checkbox" id="ttsAutoToggle" class="switch">
+        </label>
+        <label class="toggle-row">
+          <span><strong>Learn facts about me</strong><small>Auto-saves things you ask it to remember</small></span>
+          <input type="checkbox" id="memAutoToggle" class="switch">
+        </label>
+
+        <div class="range-row">
+          <label for="voiceRate">Speed</label>
+          <input type="range" id="voiceRate" min="0.7" max="1.4" step="0.05" value="1">
+          <span class="range-val" id="voiceRateVal">1.0×</span>
+        </div>
+        <div class="range-row">
+          <label for="voicePick">Voice</label>
+          <select id="voicePick"></select>
+        </div>
+        <button class="mini-btn wide" id="btnTestVoice">🔊 Test voice</button>
+      </section>
+
+      <!-- MEMORY -->
+      <section class="set-block">
+        <h3 class="set-h">Memory</h3>
+        <p class="set-p">What Jarvis knows about you. Say “remember that…” in chat and it gets saved here.</p>
+        <div class="mem-add">
+          <input type="text" id="memInput" placeholder="Add something to remember…">
+          <button class="mini-btn" id="btnMemAdd">Add</button>
+        </div>
+        <div class="mem-list" id="memList"></div>
+        <button class="mini-btn wide ghost danger" id="btnMemClear">Clear all memories</button>
+      </section>
+
+      <!-- DATA -->
+      <section class="set-block">
+        <h3 class="set-h">Your data</h3>
+        <p class="set-p">Everything lives in this browser. Export a backup before clearing your phone.</p>
+        <div class="key-actions">
+          <button class="mini-btn wide" id="btnExport">Export backup</button>
+          <button class="mini-btn wide ghost" id="btnImport">Import backup</button>
+        </div>
+        <button class="mini-btn wide ghost danger" id="btnWipe">Erase everything</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </section>
+
+      <!-- INSTALL -->
+      <section class="set-block">
+        <h3 class="set-h">Put Jarvis on your Home Screen</h3>
+        <ol class="set-steps">
+          <li>Open this page in <strong>Safari</strong></li>
+          <li>Tap the <strong>Share</strong> button <span class="inline-ic">⬆︎</span></li>
+          <li>Scroll down, tap <strong>Add to Home Screen</strong></li>
+          <li>Tap <strong>Add</strong> — done</li>
+        </ol>
+      </section>
+
+      <p class="build-stamp">Jarvis · built for iPhone</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SHEET: MEMORY ============ -->
+<div class="sheet-backdrop" id="memorySheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Memory">
+    <div class="sheet-grip"></div>
+    <div class="sheet-head">
+      <h2 class="sheet-title">Memory</h2>
+      <button class="icon-btn ghost" id="btnCloseMemory" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="set-p">Facts Jarvis keeps in mind in every chat.</p>
+      <div class="mem-list big" id="memListBig"></div>
+      <button class="mini-btn wide" id="btnMemoryAdd">
+        ＋ Add a fact
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TOAST + CONFIRM ============ -->
+<div class="toast" id="toast" hidden><span id="toastText"></span></div>
+
+<div class="sheet-backdrop" id="confirmSheet" hidden>
+  <div class="sheet confirm" role="dialog" aria-modal="true">
+    <h3 class="confirm-title" id="confirmTitle">Are you sure?</h3>
+    <p class="confirm-body" id="confirmBody"></p>
+    <div class="confirm-actions">
+      <button class="mini-btn wide ghost" id="confirmNo">Cancel</button>
+      <button class="mini-btn wide danger" id="confirmYes">Yes</button>
+    </div>
+  </div>
+</div>
+
+<div class="update-bar" id="updateBar" hidden>
+  New version ready <button id="btnReload">Reload</button>
+</div>
+
+<script type="module" src="./assets/js/app.js"></script>
+</body>
+</html>
