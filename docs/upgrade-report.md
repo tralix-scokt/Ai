@@ -193,13 +193,14 @@ The project is intentionally buildless (static ESM, no bundler, no runtime depen
 
 | Step | Command | Result |
 | --- | --- | --- |
-| Static audit / lint-equivalent | `node tools/check.mjs` | **87/87 passed** |
+| Static audit / lint-equivalent | `node tools/check.mjs` | **90/90 passed** |
 | Unit tests (store, markdown, highlight, models, tools, personality, errors, util) | `node tests/logic.test.mjs` | **121/121 passed** |
-| Runtime integration tests (jsdom: boot, chat, streaming, stop, sheets, memory, projects, search, model picker, accessibility wiring) | `node tests/dom.test.mjs` | **69 passed, 0 failed** |
+| Backend integration (real handler vs a Responses-API double) | `node tests/backend.test.mjs` | **93 passed, 0 failed** |
+| Runtime integration tests (jsdom: boot, chat, streaming, stop, retry, connection states, sheets, memory, projects, search, model picker, scroll lock) | `node tests/dom.test.mjs` | **118 passed, 0 failed** |
 | Backend smoke test | `curl /api/health`, `/api/models`, `/api/chat`, static assets | **200 / expected payloads** |
 | Production artifact | `node server/node.js --static` on `0.0.0.0:8787` | `index.html`, `app.css`, `app.js`, `manifest.webmanifest`, `sw.js`, all icons → **200** |
 
-Aggregate shortcut: `npm run verify` (check + logic + dom).
+Aggregate shortcut: `npm run verify` (check + logic + backend + dom). See `docs/connection-report.md` for the live-connection status.
 **No known errors.** No failing tests, no console-breaking defects, no dead buttons.
 
 ---
