@@ -101,6 +101,9 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor;
 .app {
   position: fixed;
   inset: 0;
+  height: 100vh;                      /* fallback for browsers without dvh */
+  height: 100dvh;                     /* follow changing mobile browser chrome */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -300,7 +303,8 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor;
 
 /* --------------------------------- chat ---------------------------------- */
 .chat {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
+  min-height: 0;                       /* keep long chats inside the scroll pane */
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;

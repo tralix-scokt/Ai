@@ -6,7 +6,7 @@
 
 // Bump this whenever the app shell changes. Cache-first clients otherwise keep
 // serving an old shell after GitHub Pages has deployed a newer release.
-const VERSION = 'jarvis-v2';
+const VERSION = 'jarvis-v3';
 const CACHE_PREFIX = 'jarvis-';
 const SHELL = [
   './',
@@ -19,6 +19,7 @@ const SHELL = [
   './assets/js/markdown.js',
   './assets/js/providers.js',
   './assets/js/voice.js',
+  './assets/js/scrolling.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
