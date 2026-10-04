@@ -581,7 +581,8 @@
       <div class="field">
         <label for="connectBase">Backend URL</label>
         <input type="url" id="connectBase" inputmode="url" autocapitalize="off" autocorrect="off"
-               placeholder="https://your-backend.example.com" spellcheck="false">
+               placeholder="https://tralix-backend.your-subdomain.workers.dev" spellcheck="false">
+        <p class="hint" id="connectSource"></p>
       </div>
       <div class="btn-row">
         <button type="button" class="btn-ghost wide" id="btnConnectSave">Save &amp; test</button>
@@ -590,12 +591,12 @@
       <details class="deploy-help">
         <summary>How to deploy the backend</summary>
         <ol class="set-steps">
-          <li>Open <code>server/</code> in this repository.</li>
-          <li>Set <code>OPENAI_API_KEY</code> (and optionally <code>TRALIX_*_MODEL</code>) as server secrets.</li>
-          <li>Deploy the worker (Cloudflare Workers is the shortest path).</li>
-          <li>Paste the resulting URL above and tap <strong>Save &amp; test</strong>.</li>
+          <li>Push this repository to GitHub. The workflow in <code>.github/workflows/deploy-backend.yml</code> deploys <code>server/</code> for you.</li>
+          <li>Add three repository secrets: <code>CLOUDFLARE_API_TOKEN</code>, <code>CLOUDFLARE_ACCOUNT_ID</code> and <code>OPENAI_API_KEY</code>.</li>
+          <li>Run the <strong>Deploy TRALIX backend</strong> workflow. It prints the worker URL.</li>
+          <li>Put that URL in <code>backend.json</code> (<code>{"url": "https://…"}</code>) and push — or paste it above to use it on this device only.</li>
         </ol>
-        <p class="hint">The key stays on the server. This app never receives it.</p>
+        <p class="hint">Prefer your own server? <code>OPENAI_API_KEY=… node server/node.js --static</code> serves the app and the API together. The key stays on the server either way — this frontend never receives it.</p>
       </details>
     </div>
   </div>

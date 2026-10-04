@@ -12,25 +12,46 @@ import { TOOLS } from '../tools.js';
 import { toast } from './feedback.js';
 import { openSheet } from './sheets.js';
 
-export function createModelPicker({ getSettings, onSelect = () => {} }) {
+export function createModelPicker({ getSettings, onSelect = () => {}, getHealth = () => null } = {}) {
   const listEl = $('#modelList');
   const noteEl = $('#modelNote');
   const capEl = $('#capabilityList');
 
+  /** Availability of a tier, reported by the backend probe (null = unknown). */
+  function availability(tierId) {
+    const models = getHealth?.()?.models;
+    const entry = models && models[tierId];
+    return entry && typeof entry.available === 'boolean' ? entry.available : null;
+  }
+
   function render() {
     const settings = getSettings();
     const active = settings.model;
+    const health = getHealth?.();
     listEl.innerHTML = '';
+
+    if (health && health.reachable && !health.ok) {
+      // Chat cannot work; the tier list must not imply that it can.
+      const warn = document.createElement('div');
+      warn.className = 'model-warning';
+      warn.setAttribute('role', 'status');
+      warn.textContent = health.status === 'unconfigured'
+        ? 'The backend is reachable but has no API key set, so replies will fail. Add OPENAI_API_KEY on the server.'
+        : (health.message || 'The backend cannot currently reach the AI service.');
+      listEl.appendChild(warn);
+    }
 
     for (const tier of MODELS) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = `model-opt${tier.id === active ? ' sel' : ''}`;
       button.setAttribute('aria-pressed', String(tier.id === active));
+      const live = availability(tier.id);
       button.innerHTML = `
         <div class="mo-body">
           <span class="mo-name">${escapeHtml(tier.label)}
             ${tier.recommended ? '<span class="mo-tag">Recommended</span>' : ''}
+            ${live === false ? '<span class="mo-tag mo-tag-warn">Unavailable on this backend</span>' : ''}
           </span>
           <span class="mo-desc">${escapeHtml(tier.tagline)} — ${escapeHtml(tier.description)}</span>
           <span class="mo-badges">

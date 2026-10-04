@@ -711,6 +711,17 @@ img { max-width: 100%; }
 .tok-del { color: var(--danger); display: inline-block; width: 100%; background: rgba(255,107,107,.08); }
 
 /* message actions */
+.act.primary {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+.act.primary:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.msg-bot.incomplete .msg-body::after {
+  content: ''; display: block; height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--warn, #d9a441) 35%, transparent), transparent);
+}
+
 .msg-actions {
   display: flex; align-items: center; gap: 2px;
   margin: 8px 0 0 -6px;
@@ -1322,3 +1333,20 @@ img { max-width: 100%; }
 .msg-body { -webkit-user-select: text; user-select: text; }
 .sidebar, .topbar, .composer { -webkit-user-select: none; user-select: none; }
 .composer textarea { -webkit-user-select: text; user-select: text; }
+
+/* Model picker: a backend that cannot serve chat says so, in the picker. */
+.model-warning {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warn) 38%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.mo-tag-warn {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 34%, transparent);
+}

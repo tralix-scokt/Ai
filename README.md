@@ -59,25 +59,42 @@ OPENAI_API_KEY=sk-... node server/node.js --static
 (`.nojekyll` is present, all paths are relative, and the manifest keeps `id: "/Ai/"`.)
 After deploying, hard-refresh once so the new service worker replaces the old shell.
 
-**Backend** — pick one:
+**Backend** — it must be deployed separately, because GitHub Pages cannot run
+server code and cannot hold a secret. Pick one:
 
 ```bash
-# Cloudflare Workers (shortest path)
-wrangler secret put OPENAI_API_KEY
-wrangler deploy server/worker.js --name tralix-backend
+# Cloudflare Workers, via GitHub Actions (nothing to install)
+#   1. add repo secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, OPENAI_API_KEY
+#   2. run the "Deploy TRALIX backend" workflow — it prints the worker URL
 
-# or any Node 18+ host
-OPENAI_API_KEY=sk-... node server/node.js
+# …or from your machine
+export OPENAI_API_KEY=sk-...
+./tools/deploy-backend.sh
+
+# …or self-host the app and the API together on any Node 18+ box
+OPENAI_API_KEY=sk-... node server/node.js --static
 ```
 
-Then in the app: **Settings → Advanced → Backend URL** → paste the URL → **Save URL**,
-then **Test connection**. Or tap the connection row in the sidebar → **Set up**.
+**Connect the two** — put the backend URL in `backend.json` (a public pointer,
+never a key) and push:
+
+```json
+{ "url": "https://tralix-backend.<your-subdomain>.workers.dev" }
+```
+
+The frontend resolves its API base from, in order: a device override saved in
+the app, `window.TRALIX_API_BASE`, `?api=https://…`, `backend.json`, then same
+origin. **Diagnostics** always reports which one is in use. For one device only,
+paste the URL in the Connect sheet (sidebar → connection row → **Set up**) and
+tap **Save & test** — that check performs a real upstream round-trip.
+
+### Environment / secrets
 
 ### Environment / secrets
 
 | Variable | Where | Required | Notes |
 |---|---|---|---|
-| `OPENAI_API_KEY` | **server only** | yes | Never in the frontend, never in Git. |
+| `OPENAI_API_KEY` | **server only** | yes | Never in the frontend, never in Git, never logged. |
 | `TRALIX_MODEL_FAST/_SMART/_CODE/_RESEARCH` | server | no | Override the tier → model mapping. |
 | `TRALIX_ALLOWED_ORIGINS` | server | no | Comma-separated CORS allowlist (default `*`). |
 | `TRALIX_ENABLE_WEB_SEARCH` | server | no | `true` enables the OpenAI web-search tool and flips the UI capability to *Available*. |

@@ -7,7 +7,7 @@
    ========================================================================== */
 
 import { $, copyText, haptic } from './util.js';
-import { APP } from './config.js';
+import { APP, apiBase, apiBaseSource, loadBackendConfig } from './config.js';
 import * as Store from './store.js';
 import * as Api from './api/chat.js';
 import * as Voice from './voice.js';
@@ -32,6 +32,7 @@ const state = {
   settings: Store.loadSettings(),
   chat: null,
   health: null,
+  healthAt: 0,
 };
 
 const el = {
@@ -142,6 +143,7 @@ const memoryManagerSheet = createMemoryManager($('#memManagerSheet'), {
 
 const modelPicker = createModelPicker({
   getSettings: () => state.settings,
+  getHealth: () => state.health,
   onSelect: () => {
     saveSettings(state.settings);
     updateModelChip();
@@ -168,13 +170,12 @@ const settingsUi = createSettings({
     settingsUi.refresh();
   },
   getHealth: () => state.health,
-  refreshHealth: async ({ force = true } = {}) => {
-    const health = await Api.refreshCapabilities({ force });
-    state.health = health;
-    updateConnText();
+  refreshHealth: async ({ force = true, probe = false } = {}) => {
+    const health = await refreshHealth({ force, probe });
     modelPicker.render();
     return health;
   },
+  getBackendInfo: () => ({ base: apiBase(), source: apiBaseSource() }),
   openConnect: () => openConnect(),
   memoryManager: memoryManagerSettings,
   modelPicker,
@@ -222,6 +223,12 @@ const chat = createChatController({
   onMemoryChanged: () => { sidebar.refreshCounts(); memoryManagerSettings.refresh(); },
   getHealth: () => state.health,
   onSpeakingChange: () => {},
+  // A completed round-trip is the strongest possible proof of a working
+  // connection, so it updates the reported state immediately.
+  onRequestSucceeded: () => {
+    if (!state.health?.ok) refreshHealth({ force: true });
+    else state.healthAt = Date.now();
+  },
 });
 
 /* ============================== chrome bits ============================== */
@@ -237,65 +244,159 @@ function updateModelChip() {
 }
 
 /**
- * Connection details are separate from the activity indicator: the ring shows
- * what TRALIX is doing right now, `connText` shows whether a backend is there.
+ * Connection state is separate from the activity indicator: the ring shows what
+ * TRALIX is doing right now, `connText` says whether a backend is actually able
+ * to answer. Six honest states — never a vague "offline" when the truth is
+ * "the server has no key".
  */
+export const CONNECTION_TEXT = {
+  checking: 'Checking backend…',
+  ready: 'TRALIX backend · connected',
+  busy: 'TRALIX backend · rate limited',
+  unconfigured: 'Backend has no API key',
+  unauthorized: 'Backend key rejected',
+  unreachable: 'Backend unreachable',
+  upstream: 'AI service unreachable',
+  local: 'Device-only key',
+};
+
+/** Reduce a health report to one of the connection states above. */
+export function connectionState(health) {
+  if (!health) return 'checking';
+  if (health.reachable === false) return 'unreachable';
+  if (health.ok) return health.status === 'rate_limit' ? 'busy' : 'ready';
+  switch (health.status) {
+    case 'unconfigured': return 'unconfigured';
+    case 'unauthorized': return 'unauthorized';
+    case 'rate_limit': return 'busy';
+    case 'upstream_error':
+    case 'upstream_timeout':
+    case 'unreachable': return 'upstream';
+    default: return 'unreachable';
+  }
+}
+
+const CONN_TONE = {
+  checking: 'unknown',
+  ready: 'ok',
+  busy: 'ok',
+  unconfigured: 'bad',
+  unauthorized: 'bad',
+  unreachable: 'bad',
+  upstream: 'bad',
+  local: 'ok',
+};
+
 function updateConnText() {
   const transport = Api.activeTransport(state.settings);
   const node = $('#connText');
   const ring = $('#statusSidebar');
+  if (!node) return;
 
   if (transport === 'local') {
-    node.textContent = 'Device-only key';
-    if (ring) ring.dataset.conn = 'ok';
+    node.textContent = CONNECTION_TEXT.local;
+    if (ring) ring.dataset.conn = CONN_TONE.local;
     return;
   }
-  if (!state.health) {
-    node.textContent = 'Checking backend…';
-    if (ring) ring.dataset.conn = 'unknown';
-    return;
-  }
-  if (state.health.ok) {
-    node.textContent = 'TRALIX backend · online';
-    if (ring) ring.dataset.conn = 'ok';
-  } else {
-    node.textContent = state.health.message || 'Backend offline';
-    if (ring) ring.dataset.conn = 'bad';
-  }
+
+  const key = connectionState(state.health);
+  node.textContent = CONNECTION_TEXT[key] || CONNECTION_TEXT.unreachable;
+  if (ring) ring.dataset.conn = CONN_TONE[key] || 'unknown';
+  node.dataset.state = key;
+}
+
+/**
+ * One refresh path for every trigger: boot, the connect sheet, the online
+ * event, the tab regaining focus, a failed send, and a slow poll. Health is
+ * cheap (it is cached server-side for 45s), so polling costs almost nothing.
+ */
+let healthInFlight = null;
+async function refreshHealth({ force = false, probe = false } = {}) {
+  if (healthInFlight) return healthInFlight;
+  healthInFlight = (async () => {
+    try {
+      const health = await Api.refreshCapabilities({ force: force || probe, probe });
+      state.health = health;
+      state.healthAt = Date.now();
+      updateConnText();
+      return health;
+    } finally {
+      healthInFlight = null;
+    }
+  })();
+  return healthInFlight;
+}
+
+/** Backend availability detection while the app is open. */
+const HEALTH_POLL_MS = 60000;
+let healthTimer = null;
+function startHealthWatch() {
+  const tick = () => { if (!document.hidden) refreshHealth(); };
+  clearInterval(healthTimer);
+  healthTimer = setInterval(tick, HEALTH_POLL_MS);
+  document.addEventListener('visibilitychange', () => {
+    // Coming back to a stale tab is exactly when a re-check is worth it.
+    if (!document.hidden && Date.now() - state.healthAt > 20000) refreshHealth();
+  });
 }
 
 /* ============================== connection =============================== */
+function describeHealth(health) {
+  const key = connectionState(health);
+  const where = apiBase() || 'this origin';
+  switch (key) {
+    case 'ready':
+      return {
+        ok: true,
+        line: `Connected · ${health.provider || 'openai'}${health.model ? ` · ${health.model}` : ''}${health.latencyMs ? ` · ${health.latencyMs}ms` : ''}`,
+        explain: `TRALIX verified the connection to the AI service at ${where}. Messages are sent to the backend for a reply and are not stored on the server.`,
+      };
+    case 'busy':
+      return { ok: true, line: 'Rate limited, but the backend is configured', explain: health.message || 'The AI service is throttling this key. TRALIX will retry shortly.' };
+    case 'unconfigured':
+      return { ok: false, line: 'Backend reachable · no API key set', explain: 'The TRALIX backend answered but has no OPENAI_API_KEY. Set it as a server secret (server/README.md) — the key never belongs in this frontend.' };
+    case 'unauthorized':
+      return { ok: false, line: 'Backend reachable · the key was rejected', explain: 'The AI service rejected the server key. Check OPENAI_API_KEY on the backend.' };
+    case 'upstream':
+      return { ok: false, line: 'Backend reachable · AI service unreachable', explain: 'The TRALIX backend is up but cannot reach the AI service from its network. Check OPENAI_BASE_URL or the provider status.' };
+    default:
+      return { ok: false, line: 'No response from the backend', explain: 'This app needs the TRALIX backend to be reachable. The backend holds the OpenAI key — it is never present in this frontend. Deploy server/ and paste its URL below.' };
+  }
+}
+
 async function openConnect() {
   const statusEl = $('#connectStatus');
+  const sourceEl = $('#connectSource');
   $('#connectBase').value = apiBase();
+  if (sourceEl) {
+    sourceEl.textContent = apiBase()
+      ? `In use: ${apiBase()} (from ${apiBaseSource()}).`
+      : `In use: this origin (${apiBaseSource()}). Set a URL to use a backend deployed elsewhere.`;
+  }
   statusEl.className = 'status-line';
   statusEl.textContent = 'Checking…';
   openSheet('connectSheet');
 
-  const health = await Api.refreshCapabilities({ force: true });
-  state.health = health;
-  updateConnText();
-  statusEl.textContent = health.ok
-    ? `Connected · ${health.provider || 'backend'}${health.model ? ` · ${health.model}` : ''}`
-    : (health.message || 'No response from the backend');
-  statusEl.className = `status-line ${health.ok ? 'ok' : 'bad'}`;
-
-  $('#connectExplanation').textContent = health.ok
-    ? 'TRALIX is talking to its backend. Messages are sent to the API for a reply and are not stored on the server.'
-    : 'This app needs the TRALIX backend to be reachable. The backend holds the OpenAI key — it is never present in this frontend. Deploy server/ and paste its URL below.';
+  const health = await refreshHealth({ force: true, probe: true });
+  const view = describeHealth(health);
+  statusEl.textContent = view.line;
+  statusEl.className = `status-line ${view.ok ? 'ok' : 'bad'}`;
+  $('#connectExplanation').textContent = view.explain;
+  modelPicker.render();
 }
 
 $('#btnConnectSave')?.addEventListener('click', async () => {
   const { setApiBase, normaliseBase } = await import('./config.js');
   setApiBase(normaliseBase($('#connectBase').value));
-  Api.refreshCapabilities({ force: true }).then((health) => {
-    state.health = health;
-    updateConnText();
-    const statusEl = $('#connectStatus');
-    statusEl.textContent = health.ok ? 'Connected.' : (health.message || 'Still unreachable');
-    statusEl.className = `status-line ${health.ok ? 'ok' : 'bad'}`;
-    toast(health.ok ? 'TRALIX connected' : 'Still unreachable', { tone: health.ok ? 'success' : 'error' });
-  });
+  Api.clearHealthCache?.();
+  const health = await refreshHealth({ force: true, probe: true });
+  const view = describeHealth(health);
+  const statusEl = $('#connectStatus');
+  statusEl.textContent = view.line;
+  statusEl.className = `status-line ${view.ok ? 'ok' : 'bad'}`;
+  $('#connectExplanation').textContent = view.explain;
+  modelPicker.render();
+  toast(view.ok ? 'TRALIX connected' : view.line, { tone: view.ok ? 'success' : 'error' });
 });
 
 $('#btnConnectDoctor')?.addEventListener('click', () => { closeSheet('connectSheet'); settingsUi.openDoctor(); });
@@ -370,6 +471,7 @@ window.addEventListener('offline', () => {
 
 window.addEventListener('online', () => {
   setStatus('idle');
+  refreshHealth({ force: true });          // the backend may be back with us
   toast('Back online', { tone: 'success' });
 });
 
@@ -388,6 +490,10 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('unhandledrejection', (event) => {
   console.warn('[tralix] unhandled rejection', event.reason);
 });
+
+/* A send that failed for connection reasons should re-measure the connection,
+   so the status line and the Retry affordance agree with reality. */
+window.addEventListener('tralix:connection-suspect', () => refreshHealth({ force: true }));
 
 /* ================================= init ================================== */
 async function init() {
@@ -435,15 +541,18 @@ async function init() {
     if (document.activeElement === composer.el) composer.blur();
   });
 
-  // background tasks that must not block first paint
+  // Background tasks that must not block first paint. The backend pointer is
+  // resolved first (a committed backend.json or ?api=), because every other
+  // call depends on knowing where the backend is.
   setTimeout(async () => {
-    const health = await Api.refreshCapabilities();
-    state.health = health;
+    await loadBackendConfig();
     updateConnText();
+    const health = await refreshHealth({ force: true });
     modelPicker.render();
     settingsUi.refreshDebug?.();
-    Api.syncModelMapping().then(() => settingsUi.refresh?.());
-  }, 350);
+    if (health.ok) Api.syncModelMapping().then(() => settingsUi.refresh?.());
+    startHealthWatch();
+  }, 250);
 
   // reveal
   el.boot?.remove();

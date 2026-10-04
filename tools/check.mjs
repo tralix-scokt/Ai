@@ -117,6 +117,17 @@ const scannable = allFiles.filter(f =>
   && !f.includes('node_modules')
 );
 
+/*
+ * Two narrow exemptions, and no others:
+ *   1. `.example` env templates may hold placeholders.
+ *   2. test files may hold a marker-obviously-fake key (sk-test-*, sk-fake-*)
+ *      so the harness can drive the backend without a real credential.
+ * Everything that ships to a browser is scanned unconditionally — a key-shaped
+ * literal in assets/, index.html, sw.js or the manifest is always a failure.
+ */
+const FAKE_KEY = /^sk-(test|fake|dummy|not-?real|placeholder|xxx|example)/i;
+const isTestFixture = (rel) => rel.startsWith(`tests${path.sep}`) || rel.startsWith('tests/');
+
 let leaks = 0;
 for (const file of scannable) {
   const text = await readFile(file, 'utf8');
@@ -124,14 +135,28 @@ for (const file of scannable) {
   const isTemplate = rel.endsWith('.example');
   for (const { re, label } of SECRET_PATTERNS) {
     re.lastIndex = 0;
-    const match = text.match(re);
-    if (!match) continue;
-    if (isTemplate && /your-key|sk-\.\.\.|sk-your|example/i.test(match[0])) continue;
-    leaks++;
-    bad(`${rel}: possible ${label}`, match[0].slice(0, 24) + '…');
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      const hit = match[0];
+      if (isTemplate && /your-key|sk-\.\.\.|sk-your|example/i.test(hit)) continue;
+      if (isTemplate || isTestFixture(rel)) {
+        const value = hit.split(/[:=]\s*/).pop().replace(/^["']/, '');
+        if (FAKE_KEY.test(value)) continue;
+      }
+      leaks++;
+      bad(`${rel}: possible ${label}`, hit.slice(0, 24) + '…');
+    }
   }
 }
-if (!leaks) ok('no API keys or private keys committed');
+if (!leaks) ok('no API keys or private keys committed (browser-shipped files are always scanned)');
+
+// the test fixture must never look like a usable credential
+{
+  const fixture = await readFile(path.join(root, 'tests', 'backend.test.mjs'), 'utf8');
+  const used = fixture.match(/OPENAI_API_KEY:\s*'([^']+)'/)?.[1] || '';
+  if (FAKE_KEY.test(used)) ok('the backend test uses an obviously-fake key, not a real one');
+  else bad('tests/backend.test.mjs', 'the test key is not marked as a fake');
+}
 
 // the frontend must not call a vendor API except in the opt-in local transport
 for (const file of scannable.filter(f => f.includes(path.sep + 'assets' + path.sep))) {

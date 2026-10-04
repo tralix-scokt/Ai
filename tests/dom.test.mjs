@@ -106,6 +106,10 @@ globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 0);
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 globalThis.window.requestAnimationFrame = globalThis.requestAnimationFrame;
 
+/* ------------------------------ backend.json ------------------------------ */
+// The harness answers ./backend.json so the deployed-frontend path is testable.
+let backendJson = { url: '' };
+
 /* --------------------------------- fetch ---------------------------------- */
 let fetchMode = 'down';
 let streamedText = '';
@@ -115,11 +119,27 @@ globalThis.fetch = async (url, init = {}) => {
   const target = String(url);
   requests.push({ url: target, body: init.body ? JSON.parse(init.body) : null });
 
+  if (target.includes('backend.json')) {
+    if (!backendJson) return { ok: false, status: 404, async json() { return {}; } };
+    return jsonResponse(backendJson);
+  }
+
   if (fetchMode === 'down') throw new TypeError('Failed to fetch');
 
   if (target.includes('/api/health')) {
+    if (fetchMode === 'unconfigured') {
+      // The backend answers, but it has no key: reachable ≠ ready.
+      return jsonResponse({
+        ok: false, status: 'unconfigured', reachable: true, configured: false, verified: false,
+        provider: 'openai', model: 'gpt-5', tools: [],
+        features: { webSearch: false, attachments: false },
+        error: 'invalid_config',
+        message: 'TRALIX backend is reachable but OPENAI_API_KEY is not set.',
+      });
+    }
     return jsonResponse({
-      ok: true, configured: true, provider: 'openai', model: 'gpt-5',
+      ok: true, status: 'ok', reachable: true, configured: true, verified: true,
+      provider: 'openai', model: 'gpt-5',
       tools: ['web_search'], features: { webSearch: true, attachments: false },
     });
   }
@@ -209,8 +229,26 @@ t('failed request renders a professional error state', Boolean(errorNode));
 t('error text is human, not a stack trace',
   Boolean(errorNode) && !/TypeError|undefined|at \w+/.test(errorNode.textContent), errorNode?.textContent);
 t('user message is kept, not lost', $('.msg-user')?.textContent.includes('Hello TRALIX'));
-t('retry action offered', [...$$('.msg-actions .act')].some(b => b.textContent.includes('Regenerate')));
+const errActions = () => [...($('.msg-bot.msg-error')?.querySelectorAll('.msg-actions .act') || [])].map(b => b.textContent.trim());
+t('a Retry action is offered on the failed turn', errActions().some(l => l === 'Retry'), errActions().join(','));
+t('a Connection shortcut is offered for a connection failure', errActions().some(l => l === 'Connection'), errActions().join(','));
+t('the failed turn still offers Copy', errActions().some(l => l === 'Copy'), errActions().join(','));
 t('status indicator shows an error', $('#statusSidebar').dataset.state === 'error', $('#statusSidebar').dataset.state);
+t('the connection row reports the real problem, not a vague "offline"',
+  /no api key|unreachable|rejected|not configured/i.test($('#connText').textContent), $('#connText').textContent);
+
+// Retry must actually work: bring the backend up, tap Retry, expect a reply.
+fetchMode = 'up';
+const retryBtn = [...$$('.msg-bot.msg-error .msg-actions .act')].find(b => b.textContent.trim() === 'Retry');
+retryBtn?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+await flush(150);
+t('Retry re-sends the same turn', lastChatRequest()?.body?.messages?.at(-1)?.content === 'Hello TRALIX',
+  JSON.stringify(lastChatRequest()?.body?.messages?.at(-1)));
+t('Retry clears the error state', !$('.msg-bot.msg-error'));
+t('Retry streams a real reply into the same conversation', Boolean($('.msg-bot:not(.msg-error)')?.textContent.trim()));
+t('The user message was not duplicated by Retry', $$('.msg-user').length === 1, `${$$('.msg-user').length} user bubbles`);
+t('connection status recovers after a successful reply',
+  /connected/i.test($('#connText').textContent), $('#connText').textContent);
 
 console.log('\n— backend up (streaming reply) —');
 fetchMode = 'up';
@@ -235,6 +273,7 @@ t('more menu offers follow-ups', [...$$('.more-menu button')].some(b => b.textCo
 t('status returned to idle', $('#statusSidebar').dataset.state === 'idle', $('#statusSidebar').dataset.state);
 
 console.log('\n— stop generation —');
+const errorsBeforeStop = $$('.msg-bot.msg-error').length;
 fetchMode = 'slow';
 $('#composer-input').value = 'Write me a very long essay';
 $('#composer-input').dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -248,7 +287,8 @@ await flush(80);
 t('stop restores the send button', $('#btnStop').hidden && !$('#btnSend').hidden);
 t('stop returns the status to idle', $('#statusSidebar').dataset.state === 'idle', $('#statusSidebar').dataset.state);
 t('a deliberate stop is not an error',
-  $$('.msg-bot.msg-error').length === 1, String($$('.msg-bot.msg-error').length));
+  $$('.msg-bot.msg-error').length === errorsBeforeStop,
+  `${errorsBeforeStop} → ${$$('.msg-bot.msg-error').length}`);
 t('partial reply is kept after stopping',
   $$('.msg-bot:not(.msg-error)').at(-1)?.textContent.includes('Starting a long answer'));
 fetchMode = 'up';
@@ -372,6 +412,114 @@ t('health report applied to feature flags', health.ok === true);
 const { FEATURES } = await import('../assets/js/config.js');
 t('web search reported as available by the backend', FEATURES.webSearch === true);
 t('attachments reported as unavailable', FEATURES.attachments === false);
+
+console.log('\n— automatic backend detection —');
+{
+  const healthCallsBefore = requests.filter(r => r.url.includes('/api/health')).length;
+
+  // 1. the app checks the backend on its own at boot (no user action)
+  t('the app probes /api/health by itself at boot', healthCallsBefore >= 1, `${healthCallsBefore} calls`);
+
+  // 2. coming back online triggers a re-check
+  window.dispatchEvent(new window.Event('online'));
+  await flush(60);
+  t('the "online" event re-checks the backend',
+    requests.filter(r => r.url.includes('/api/health')).length > healthCallsBefore);
+
+  // 3. a failed request marks the connection suspect and re-measures it
+  const beforeSuspect = requests.filter(r => r.url.includes('/api/health')).length;
+  window.dispatchEvent(new window.CustomEvent('tralix:connection-suspect', { detail: { code: 'network' } }));
+  await flush(60);
+  t('a failed request triggers a fresh connection check',
+    requests.filter(r => r.url.includes('/api/health')).length > beforeSuspect);
+
+  // 4. the reported status reflects the health payload (up → connected, not "coming soon")
+  t('the status row reports a verified connection',
+    /connected/i.test($('#connText').textContent), $('#connText').textContent);
+  t('the status row never claims "coming soon" for chat',
+    !/coming soon/i.test($('#connText').textContent), $('#connText').textContent);
+  t('connected state tints the indicator as healthy', $('#statusSidebar').dataset.conn === 'ok',
+    $('#statusSidebar').dataset.conn);
+
+  // 5. a reachable-but-unkeyed backend is reported honestly, not as "connected"
+  fetchMode = 'unconfigured';
+  window.dispatchEvent(new window.CustomEvent('tralix:connection-suspect', { detail: {} }));
+  await flush(80);
+  t('an unkeyed backend is not called "connected"',
+    !/connected/i.test($('#connText').textContent), $('#connText').textContent);
+  t('an unkeyed backend is named precisely',
+    /no api key/i.test($('#connText').textContent), $('#connText').textContent);
+  t('an unkeyed backend tints the indicator as bad', $('#statusSidebar').dataset.conn === 'bad',
+    $('#statusSidebar').dataset.conn);
+
+  // 6. chat is not blocked by any "coming soon" gate while disconnected
+  t('the composer stays usable while the backend is unconfigured', $('#btnSend').disabled !== undefined);
+  t('the composer is not hidden behind an availability gate', !$('#composerWrap').hidden);
+  t('the send path is not gated by a feature flag', $('#composer-input').disabled !== true);
+
+  fetchMode = 'up';
+  window.dispatchEvent(new window.CustomEvent('tralix:connection-suspect', { detail: {} }));
+  await flush(80);
+  t('the connection recovers when the backend comes back',
+    /connected/i.test($('#connText').textContent), $('#connText').textContent);
+}
+
+console.log('\n— backend URL resolution (GitHub Pages deployment) —');
+{
+  // A fresh module instance per scenario, because the base URL is cached.
+  const loadConfig = async (tag) => {
+    const mod = await import(`../assets/js/config.js?case=${tag}`);
+    return mod;
+  };
+
+  const restoreSearch = window.location.search;
+
+  // 1. same origin when nothing is configured
+  backendJson = { url: '' };
+  window.history.replaceState({}, '', '/Ai/');
+  let cfg = await loadConfig('same-origin');
+  await cfg.loadBackendConfig();
+  t('with no config the base is same-origin', cfg.apiBase() === '', JSON.stringify(cfg.apiBase()));
+  t('and the source is reported as same origin', cfg.apiBaseSource() === 'same origin', cfg.apiBaseSource());
+  t('endpoint URLs stay relative', cfg.apiUrl('/chat') === '/api/chat', cfg.apiUrl('/chat'));
+
+  // 2. backend.json points at a deployed backend (the GitHub Pages case)
+  backendJson = { url: 'https://tralix-backend.example.workers.dev' };
+  cfg = await loadConfig('backend-json');
+  await cfg.loadBackendConfig();
+  t('backend.json supplies the deployed backend URL',
+    cfg.apiBase() === 'https://tralix-backend.example.workers.dev', cfg.apiBase());
+  t('the source is attributed to backend.json', cfg.apiBaseSource() === 'backend.json', cfg.apiBaseSource());
+  t('endpoints are built against it',
+    cfg.apiUrl('/chat') === 'https://tralix-backend.example.workers.dev/api/chat', cfg.apiUrl('/chat'));
+  t('a trailing slash in the config is normalised',
+    cfg.normaliseBase('https://x.dev///') === 'https://x.dev');
+
+  // 3. ?api= beats backend.json (useful for testing a new deployment)
+  window.history.replaceState({}, '', '/Ai/?api=https%3A%2F%2Fstaging.example.dev');
+  cfg = await loadConfig('query');
+  await cfg.loadBackendConfig();
+  t('?api= overrides backend.json', cfg.apiBase() === 'https://staging.example.dev', cfg.apiBase());
+  t('the source is attributed to the query string', cfg.apiBaseSource() === '?api= parameter', cfg.apiBaseSource());
+
+  // 4. an explicit device override wins over everything
+  window.localStorage.setItem('tralix.backend.v1', 'https://self-hosted.example.dev');
+  cfg = await loadConfig('device');
+  await cfg.loadBackendConfig();
+  t('a saved device override wins', cfg.apiBase() === 'https://self-hosted.example.dev', cfg.apiBase());
+  t('the source is reported as a device override', cfg.apiBaseSource() === 'device override', cfg.apiBaseSource());
+  window.localStorage.removeItem('tralix.backend.v1');
+
+  // 5. a malformed or key-bearing config file is rejected safely
+  window.history.replaceState({}, '', '/Ai/');
+  backendJson = { url: 'not a url', key: 'sk-should-never-be-here' };
+  cfg = await loadConfig('malformed');
+  await cfg.loadBackendConfig();
+  t('a relative/garbage URL is not accepted as a base', cfg.apiBase() === '', JSON.stringify(cfg.apiBase()));
+
+  backendJson = { url: '' };
+  window.history.replaceState({}, '', restoreSearch || '/Ai/');
+}
 
 console.log('\n— errors during the run —');
 t('no uncaught errors or rejections', problems.length === 0, problems.join(' | '));

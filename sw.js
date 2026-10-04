@@ -9,7 +9,7 @@
    serving the previous build.
    ========================================================================== */
 
-const VERSION = 'tralix-v5';
+const VERSION = 'tralix-v6';
 const CACHE_PREFIX = 'tralix-';
 const SHELL = [
   './',
@@ -84,6 +84,10 @@ self.addEventListener('fetch', (event) => {
 
   // Never touch API traffic — replies and health checks must always be live.
   if (url.pathname.includes('/api/')) return;
+
+  // The deployment pointer must never be served from cache: it is how a
+  // deployed frontend finds its backend, and it changes with the deployment.
+  if (url.pathname.endsWith('/backend.json')) return;
 
   // Only handle this app's own files; leave other origins alone.
   if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;

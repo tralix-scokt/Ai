@@ -20,6 +20,7 @@ const ICON = {
   edit: '<path d="M4 20h4l10-10a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5z"/>',
   trash: '<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
   warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.1"/>',
+  link: '<path d="M10 13a4 4 0 0 0 5.7 0l2.6-2.6a4 4 0 0 0-5.7-5.7L11.4 6"/><path d="M14 11a4 4 0 0 0-5.7 0L5.7 13.6a4 4 0 0 0 5.7 5.7l1.2-1.2"/>',
 };
 
 const svg = (path, cls = '') => `<svg viewBox="0 0 24 24" aria-hidden="true" class="${cls}">${path}</svg>`;
@@ -57,7 +58,7 @@ export function messageNode(msg, ctx = {}) {
     return el;
   }
 
-  el.className = `msg msg-bot${msg.error ? ' msg-error' : ''}`;
+  el.className = `msg msg-bot${msg.error ? ' msg-error' : ''}${msg.incomplete ? ' incomplete' : ''}`;
   el.innerHTML = `${headHtml(ctx.streaming || msg.pending ? ctx.modelLabel : ctx.modelLabel)}
     <div class="msg-body"></div>
     <div class="msg-actions"></div>`;
@@ -126,10 +127,57 @@ function buildUserActions(node, msg, ctx) {
   }
 }
 
+/** Codes that mean "the connection is the problem", not "the question was bad". */
+const CONNECTION_CODES = new Set(['network', 'timeout', 'offline', 'unauthorized', 'invalid_config', 'provider_unavailable']);
+
+function buildErrorActions(node, msg, ctx) {
+  const bar = node.querySelector('.msg-actions');
+  if (!bar) return;
+  bar.setAttribute('aria-label', 'Failed response actions');
+
+  /*
+   * Retry is always offered on a failed turn. A config or connection failure is
+   * precisely when the user needs it: they fix the backend and tap again. It
+   * re-sends the same turn — nothing is invented and nothing is lost.
+   */
+  bar.appendChild(actionButton({
+    label: 'Retry',
+    icon: ICON.retry,
+    cls: 'primary',
+    title: 'Send this message again',
+    onClick: () => ctx.onAction?.('retry', msg),
+  }));
+  if (CONNECTION_CODES.has(msg.code)) {
+    bar.appendChild(actionButton({
+      label: 'Connection',
+      icon: ICON.link,
+      title: 'Check the TRALIX backend connection',
+      onClick: () => ctx.onAction?.('fix-connection', msg),
+    }));
+  }
+  bar.appendChild(actionButton({
+    label: 'Copy',
+    icon: ICON.copy,
+    onClick: () => ctx.onAction?.('copy', msg),
+  }));
+}
+
 function buildBotActions(node, msg, ctx) {
+  if (msg.error) return buildErrorActions(node, msg, ctx);
   const bar = node.querySelector('.msg-actions');
   if (!bar) return;
   bar.setAttribute('aria-label', 'Response actions');
+
+  if (msg.incomplete) {
+    // Real text, unfinished stream: keep the answer, offer the obvious next move.
+    bar.appendChild(actionButton({
+      label: 'Retry',
+      icon: ICON.retry,
+      cls: 'primary',
+      title: 'Ask again — the previous answer was cut short',
+      onClick: () => ctx.onAction?.('retry', msg),
+    }));
+  }
 
   bar.appendChild(actionButton({
     label: 'Copy', icon: ICON.copy,

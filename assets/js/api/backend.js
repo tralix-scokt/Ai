@@ -18,20 +18,46 @@ import { request, getJson, errorFromResponse, readSse } from './client.js';
 /** Is a TRALIX backend reachable? Cached briefly to keep the UI snappy. */
 let healthCache = { at: 0, value: null };
 
-export async function health({ force = false, timeoutMs = LIMITS.healthTimeoutMs } = {}) {
+/**
+ * Ask the backend how it is doing. The backend answers even when it cannot
+ * serve chat, so the UI can tell these apart:
+ *   no backend at all · backend up but no key · key rejected · ready · busy
+ * `ok === true` means TRALIX has verified it can answer a message right now.
+ */
+export async function health({ force = false, probe = false, timeoutMs = LIMITS.healthTimeoutMs } = {}) {
   const now = Date.now();
-  if (!force && healthCache.value && now - healthCache.at < 45000) return healthCache.value;
+  if (!force && !probe && healthCache.value && now - healthCache.at < 45000) return healthCache.value;
 
   try {
-    const res = await request(apiUrl('/health'), { method: 'GET', timeoutMs });
+    const res = await request(apiUrl(probe ? '/health?probe=1' : '/health'), { method: 'GET', timeoutMs });
     if (!res.ok) throw await errorFromResponse(res);
     const data = await res.json();
-    const value = { ok: true, ...data };
+    const value = {
+      reachable: true,
+      ok: Boolean(data.ok),
+      status: data.status || (data.ok ? 'ok' : 'unknown'),
+      configured: Boolean(data.configured),
+      verified: Boolean(data.verified),
+      checkedAt: data.checkedAt || new Date().toISOString(),
+      latencyMs: data.latencyMs ?? null,
+      ...data,
+    };
     healthCache = { at: now, value };
     return value;
   } catch (err) {
     const error = err instanceof TralixError ? err : new TralixError(ERROR_CODES.network, { detail: String(err) });
-    const value = { ok: false, error: error.code, detail: error.detail, message: error.message };
+    // `reachable: false` is the honest answer here: nothing answered at all.
+    const value = {
+      reachable: false,
+      ok: false,
+      status: 'unreachable',
+      configured: false,
+      verified: false,
+      error: error.code,
+      detail: error.detail,
+      message: error.message,
+      checkedAt: new Date().toISOString(),
+    };
     healthCache = { at: now, value };
     return value;
   }
@@ -40,9 +66,9 @@ export async function health({ force = false, timeoutMs = LIMITS.healthTimeoutMs
 export const clearHealthCache = () => { healthCache = { at: 0, value: null }; };
 
 /** Model mapping (tier → provider model). Safe to fail: the local fallback applies. */
-export async function models() {
+export async function models({ probe = false } = {}) {
   try {
-    return await getJson('/models', { timeoutMs: LIMITS.healthTimeoutMs });
+    return await getJson(probe ? '/models?probe=1' : '/models', { timeoutMs: LIMITS.healthTimeoutMs });
   } catch {
     return null;
   }
@@ -98,6 +124,8 @@ export async function streamChat({
   let usage = null;
   let searchUsed = false;
   let sawAny = false;
+  let endStatus = 'completed';
+  let endNote = '';
 
   const emit = (delta) => {
     if (!delta) return;
@@ -132,6 +160,8 @@ export async function streamChat({
         if (event.text) emit(event.text);
         if (event.model) modelUsed = event.model;
         if (event.usage) usage = event.usage;
+        if (event.status) endStatus = event.status;
+        if (event.note) endNote = event.note;
         break;
 
       case 'error': {
@@ -154,7 +184,7 @@ export async function streamChat({
     throw new TralixError(ERROR_CODES.unknown, { message: 'The model returned nothing. Try rephrasing.', detail: 'empty stream' });
   }
 
-  return { text: full, model: modelUsed, usage, searchUsed };
+  return { text: full, model: modelUsed, usage, searchUsed, status: endStatus, note: endNote };
 }
 
 /**
@@ -180,7 +210,10 @@ export async function ping(timeoutMs = 8000) {
 
 /** Apply a health report to runtime feature flags (honest UI). */
 export function applyHealthToFeatures(report) {
-  if (!report || !report.ok) return;
+  // Applied from any reachable report, not only from a fully-ready one: a
+  // backend that is up but unkeyed still knows which tools it has, and the UI
+  // must not claim less (or more) than the deployment can actually do.
+  if (!report || !report.reachable) return;
   if (Array.isArray(report.tools)) {
     FEATURES.webSearch = report.tools.includes('web_search');
     FEATURES.codeExecution = report.tools.includes('code_execution');

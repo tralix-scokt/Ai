@@ -7,7 +7,7 @@
    ========================================================================== */
 
 import { $, formatBytes } from '../util.js';
-import { APP, apiBase, apiUrl, FEATURES } from '../config.js';
+import { APP, apiBase, apiBaseSource, apiUrl, FEATURES } from '../config.js';
 import * as Store from '../store.js';
 import { activeTransport, transportLabel } from '../api/chat.js';
 import { modelById, resolvedSummary } from '../models.js';
@@ -39,13 +39,40 @@ export function collectDiagnostics({ settings, health }) {
   const rows = [];
   const transport = activeTransport(settings);
 
+  const statusWord = health?.ok ? 'verified'
+    : health?.status === 'unconfigured' ? 'reachable, no key'
+    : health?.status === 'unauthorized' ? 'key rejected'
+    : health?.status === 'rate_limit' ? 'rate limited'
+    : health?.reachable ? 'reachable, AI service unreachable'
+    : 'unreachable';
+
   rows.push({
-    label: 'Backend reachable',
-    detail: health?.ok
-      ? `${apiUrl('')} · ${health.provider || 'openai'} · model ${health.model || 'default'}`
-      : (health?.message || 'No response from the TRALIX backend'),
-    state: health?.ok ? 'ok' : 'bad',
+    label: 'Backend + AI service',
+    detail: `${apiUrl('')} · ${statusWord}`
+      + (health?.model ? ` · ${health.provider || 'openai'}/${health.model}` : '')
+      + (health?.latencyMs ? ` · ${health.latencyMs}ms` : ''),
+    state: health?.ok ? 'ok' : (health?.reachable ? 'warn' : 'bad'),
   });
+
+  rows.push({
+    label: 'Backend URL source',
+    detail: `${apiBase() || 'same origin'} · ${apiBaseSource()}`,
+    state: 'info',
+  });
+
+  if (transport === 'backend' && health?.reachable && !health?.configured) {
+    rows.push({
+      label: 'Recommended fix',
+      detail: 'Set OPENAI_API_KEY as a server secret on the backend (wrangler secret put OPENAI_API_KEY). The key never goes in this app.',
+      state: 'info',
+    });
+  } else if (transport === 'backend' && health?.status === 'unauthorized') {
+    rows.push({
+      label: 'Recommended fix',
+      detail: 'The AI service rejected the backend key. Replace OPENAI_API_KEY and redeploy the backend.',
+      state: 'info',
+    });
+  }
 
   rows.push({
     label: 'Transport',

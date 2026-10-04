@@ -3,15 +3,20 @@
 #   npx wrangler deploy server/worker.js --name tralix-backend
 #   npx wrangler secret put OPENAI_API_KEY
 #
-# Then paste the worker URL into TRALIX → Settings → Advanced → Backend URL
-# (or Connect sheet → Backend URL).
+# Then put the worker URL in ./backend.json so the GitHub Pages frontend finds
+# it, or paste it into TRALIX → Settings → Advanced → Backend URL for one device.
+#
+# The key is a secret, never a var:
+#   npx wrangler secret put OPENAI_API_KEY
 
 name = "tralix-backend"
 main = "worker.js"
 compatibility_date = "2025-06-01"
 
 [vars]
-TRALIX_ALLOWED_ORIGINS = "*"
+# Lock this to your deployed frontend origin once it works:
+#   "https://tralix-scokt.github.io,http://localhost:8787"
+TRALIX_ALLOWED_ORIGINS = "https://tralix-scokt.github.io"
 TRALIX_ENABLE_WEB_SEARCH = "false"
 
 # Secrets (set with `wrangler secret put`, never in this file):

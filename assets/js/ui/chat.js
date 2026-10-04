@@ -236,8 +236,9 @@ export function createChatController(deps) {
     const { messages, instructions } = buildRequest();
 
     let failure = null;
+    let result = null;                  // declared outside: the outcome is read after the catch
     try {
-      const result = await Api.send({
+      result = await Api.send({
         settings,
         messages,
         instructions,
@@ -271,18 +272,32 @@ export function createChatController(deps) {
       }
       botMsg.error = true;
       botMsg.code = failure.code;
+      botMsg.retryable = failure.retryable !== false;
       persist();
       render();
       pinToBottom();
       setError(failure.message);
+      // Tell the app to re-measure the connection: the status line, the Retry
+      // button and reality must agree with each other.
+      window.dispatchEvent(new CustomEvent('tralix:connection-suspect', { detail: failure.toDebug?.() || {} }));
       return;
     }
 
     botMsg.text = full.trim() || '_No reply came back. Try again._';
+    if (result?.status === 'incomplete' && result?.note === 'connection-dropped') {
+      // The answer is real but unfinished — say so instead of pretending, and
+      // offer Retry without throwing away the text that did arrive.
+      botMsg.incomplete = true;
+      botMsg.text += '\n\n> ⚠️ The connection dropped before this answer finished.';
+    }
     persist();
     refreshNode(botMsg);
     onChatsChanged();
     setStatus('idle');
+    if (result?.status === 'completed') {
+      // A verified round-trip means the connection is genuinely working.
+      deps.onRequestSucceeded?.();
+    }
 
     if (settings.voice.enabled && settings.voice.auto && Voice.ttsSupported) {
       speakMessage(botMsg, { auto: true });
@@ -300,6 +315,39 @@ export function createChatController(deps) {
       if (!silent) toast('Stopped');
     }
     setStatus('idle');
+  }
+
+  /* --------------------------------- retry -------------------------------- */
+  /**
+   * Retry is the honest sibling of Regenerate: it removes the failed assistant
+   * bubble and re-sends the *same* turn, including the user's message that is
+   * already on screen. Nothing is invented, and the draft is never lost.
+   */
+  async function retry(botId) {
+    if (streaming) { toast('Still working on the previous reply'); return false; }
+    const chat = getChat();
+    if (!chat) return false;
+
+    const index = chat.messages.findIndex(m => m.id === botId);
+    if (index === -1) return false;
+
+    const target = chat.messages[index];
+    if (!target?.error) return false;
+
+    // Remove the failed bubble (and anything hidden queued behind it).
+    chat.messages.splice(index, 1);
+    while (chat.messages.length && chat.messages[chat.messages.length - 1].hidden) chat.messages.pop();
+
+    const lastUser = [...chat.messages].reverse().find(m => m.role === 'user' && !m.hidden);
+    if (!lastUser) {
+      toast('There is nothing to retry');
+      return false;
+    }
+
+    persist();
+    render();
+    await streamReply();
+    return true;
   }
 
   /* ------------------------------- regenerate ----------------------------- */
@@ -338,6 +386,14 @@ export function createChatController(deps) {
 
       case 'regenerate':
         await regenerate(msg.id);
+        return;
+
+      case 'retry':
+        await retry(msg.id);
+        return;
+
+      case 'fix-connection':
+        deps.onOpenConnect?.();
         return;
 
       case 'speak':
@@ -475,6 +531,7 @@ export function createChatController(deps) {
     send,
     stopStreaming,
     regenerate,
+    retry,
     runFollowUp,
     speakMessage,
     stopSpeaking,
