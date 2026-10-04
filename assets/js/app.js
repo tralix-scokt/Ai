@@ -1144,7 +1144,11 @@ init();
 /* ============================== PWA ====================================== */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then(reg => {
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+      // Home Screen PWAs can stay open for long stretches; check the worker on
+      // every load rather than waiting for the browser's background interval.
+      reg.update().catch(() => {});
+
       reg.addEventListener('updatefound', () => {
         const sw = reg.installing;
         sw?.addEventListener('statechange', () => {
