@@ -1,208 +1,261 @@
-# Jarvis
+# TRALIX AI
 
-A personal AI assistant that runs in your browser and lives on your iPhone's Home Screen.
-ChatGPT-style interface, Gemini brain, memory, and push-to-talk voice.
+**Intelligent AI Assistant** — a mature, mobile-first AI assistant you can install
+on your Home Screen, plus a secure backend that keeps the OpenAI key on the server.
 
-**No PC needed. No App Store. No server. No subscription.**
+```
+User
+ ↓
+TRALIX AI frontend                    (static PWA — GitHub Pages safe)
+ ↓
+Secure TRALIX backend / API           (holds the key, enforces the rules)
+ ↓
+OpenAI API → OpenAI model
+ ↓
+TRALIX backend → TRALIX AI frontend → User
+```
 
----
-
-## What it is
-
-A single web app that talks directly to Google's Gemini API from your phone.
-Your API key is stored only in your phone's browser storage — it is never sent to any
-server of ours, because there isn't one. The whole app is static files.
-
----
-
-## Setup (about 3 minutes, all on your iPhone)
-
-### 1. Get a free Gemini API key
-
-1. Open **Safari** and go to **https://aistudio.google.com/apikey**
-2. Sign in with your Google account
-3. Tap **Create API key**
-4. Tap the key to copy it
-
-It's free. No credit card. The free tier covers normal personal use — see limits below.
-
-### 2. Open Jarvis and paste the key
-
-1. Open your Jarvis link
-2. Tap the **☰** menu (top-left) → **Settings**
-3. Paste the key into *Your Gemini API key*
-4. Tap **Save key** — you should see **"Key saved and working"**
-
-If it says the key is wrong, re-copy it. Gemini keys are long and start with `AIza`.
-
-### 3. Put it on your Home Screen
-
-1. In Safari, tap the **Share** button (the square with an arrow)
-2. Scroll down → **Add to Home Screen**
-3. Tap **Add**
-
-You now have a Jarvis icon. Opening it runs fullscreen with no browser bars — it feels
-like a native app.
+No scraping, no browser automation, no ChatGPT.com behind the scenes: the app talks
+to the official **OpenAI Responses API** through our own `/api/chat` endpoint.
 
 ---
 
-## Using it
+## What it is now
 
-| I want to… | Do this |
+| This is TRALIX | This is not |
 |---|---|
-| Type a message | Tap the box, type, tap the arrow |
-| **Talk to it** | **Press and hold** the mic button, speak, let go — it sends |
-| Start a new chat | **+** in the top bar |
-| Find an old chat | **☰** menu → search |
-| Switch AI model | Tap the model name at the top |
-| Hear a reply read aloud | Tap **🔊 Listen** under the answer |
-| Make it always speak | Settings → Voice → *Auto-speak every reply* |
-| Change its personality | Settings → Personality (there's a "Classic Jarvis butler" mode) |
-| See what it remembers | **☰** menu → **Memory** |
+| An independent product identity (TRALIX AI · Intelligent AI Assistant) | A rebranded vendor chat window |
+| A mobile-first, iPhone-optimised interface | A desktop app squeezed onto a phone |
+| A secure backend + a static frontend | An API key pasted into JavaScript |
+| Honest about what it can and cannot do | A demo that pretends features exist |
 
-### Making it remember things
-
-Just say it naturally — Jarvis picks it up automatically:
-
-- *"Remember that my name is Tralix"*
-- *"My name is Tralix and I live in Warri"*
-- *"Call me Chief"*
-- *"Remember I'm building an AI assistant"*
-
-Those get saved to Memory and are included in every future chat. You can review, add,
-or delete any of them from the Memory screen. Turn automatic saving off in
-Settings → Voice → *Learn facts about me*.
+**JARVIS is a personality mode inside TRALIX**, not the product name.
+**Provider model names are an implementation detail** — users choose
+*TRALIX Fast / Smart / Code / Research*.
 
 ---
 
-## Give it a personality
+## Quick start
 
-Settings → **Personality** has four one-tap presets:
-
-- **Warm & friendly** — encouraging and human
-- **Short & sharp** — ruthless brevity
-- **Classic Jarvis butler** — refined British butler, calls you "sir"
-- **Coach & cheerleader** — motivating, always ends with a next step
-
-Or write your own in the text box. Anything you put there replaces the default.
-
----
-
-## What works, and what iPhone won't allow
-
-**Works great:**
-- Chat with streaming replies, markdown, code blocks with copy buttons
-- Hold-to-talk voice input
-- Spoken replies with a choice of voices and speed
-- Memory that persists between sessions
-- Install to Home Screen, works offline for the app shell
-- Dark / light / automatic themes
-- Export and import a backup of everything
-
-**iPhone limits — these are Apple's rules, not bugs:**
-
-- **Voice input needs the screen on and Jarvis open.** iOS suspends microphone access
-  for backgrounded web apps. There is no "Hey Jarvis" always-listening mode in a web
-  app — that requires a native app built on a Mac.
-- **Timers and alarms are in-conversation only.** A web app cannot add to the iPhone
-  Clock or Reminders app. You can ask Jarvis to track things and it will remember them.
-- **Screen lock stops everything**, including speech.
-
-If you later want always-listening and Siri integration, the path is an Apple Shortcut
-that calls this same API — ask and I'll set that up.
-
----
-
-## Free tier limits
-
-The Gemini free tier is genuinely free but rate-limited. Roughly:
-
-- **Gemini 3.8 Flash** — the default, fast and capable
-- **Gemini 3.5 Flash Lite** — fastest, highest daily allowance
-- Limits are per *project*, and reset at midnight Pacific time
-
-If you hit a limit, Jarvis tells you plainly and you can retry in a moment, or switch
-to Flash Lite from the model menu for a higher daily allowance.
-
----
-
-## Troubleshooting
-
-**"That API key looks wrong"**
-Re-copy the key from aistudio.google.com/apikey. Watch for a trailing space.
-
-**Mic button does nothing / "Microphone access is blocked"**
-The page must be on **https://** (not http). Then check
-iPhone Settings → Safari → Microphone. Also make sure you're in Safari, not an in-app
-browser like Instagram or Facebook.
-
-**Voice types the wrong thing**
-Speech recognition improves with a stable connection. Hold the button, speak clearly,
-and release when done — it keeps listening while your thumb is down.
-
-**"Rate limit hit"**
-You're sending faster than the free tier allows. Wait a few seconds, or switch to
-Flash Lite in the model menu.
-
-**Replies are cut off**
-Long answers can hit the output limit. Say "continue" and it will pick up.
-
-**Nothing loads after an update**
-Close the app fully (swipe up from the bottom, swipe the card away) and reopen.
-
----
-
-## Your data
-
-Everything — chats, memories, settings — lives in your phone's browser storage for this
-site. Nothing syncs anywhere.
-
-- **Export backup** in Settings saves a `.json` file to your Files app
-- Your **API key is never included** in an export
-- Clearing Safari data, or deleting the app, **erases everything** — export first
-- **Erase everything** wipes chats and memories but keeps your key
-
----
-
-## For developers
-
-Static site, zero build step, no dependencies.
-
-```
-index.html                 app shell + markup
-manifest.webmanifest       PWA install metadata
-sw.js                      service worker (offline app shell)
-assets/app.css             design system (CSS custom properties, iOS safe areas)
-assets/js/util.js          helpers, toast, confirm, clipboard
-assets/js/store.js         all localStorage persistence
-assets/js/markdown.js      dependency-free markdown renderer (XSS-safe)
-assets/js/providers.js     Gemini client + streaming + prompt building
-assets/js/voice.js         Speech Recognition & Synthesis for iOS
-assets/js/scrolling.js     chat scroll + visual viewport keyboard handling
-assets/js/app.js           UI state, chat flow, wiring
-icons/                     generated app icons
-```
-
-Run locally:
+### 1. Try the interface (no backend yet)
 
 ```bash
-python3 -m http.server 3000
+npx serve .            # or: python3 -m http.server
 ```
 
-Run the logic tests:
+The UI loads fully. Without a backend, sending a message produces a clear,
+professional error state instead of a fake reply.
+
+### 2. Run the whole product locally (recommended)
 
 ```bash
-node tests/logic.test.mjs
+OPENAI_API_KEY=sk-... node server/node.js --static
+# → http://localhost:8787
 ```
 
-A few deliberate choices worth knowing:
+### 3. Deploy
 
-- **No framework.** The whole app is smaller than most frameworks' bundles, which
-  matters on a phone connection.
-- **Markdown is escaped before formatting**, never after — the renderer pulls code
-  blocks out first, escapes the rest, then applies formatting.
-- **The model list self-heals.** On save, the app asks Google which models your key can
-  actually reach and moves you to a working one, because model IDs get retired often.
-- **Reasoning config is generation-aware.** Gemini 3.x wants `thinkingLevel`; 2.5 wants
-  `thinkingBudget`. Sending both is a hard error, so it is chosen per model — and the
-  request retries once without it if a model rejects it.
+**Frontend** — already static: push to `main`; GitHub Pages serves the app shell.
+(`.nojekyll` is present, all paths are relative, and the manifest keeps `id: "/Ai/"`.)
+After deploying, hard-refresh once so the new service worker replaces the old shell.
+
+**Backend** — it must be deployed separately, because GitHub Pages cannot run
+server code and cannot hold a secret. Pick one:
+
+```bash
+# Cloudflare Workers, via GitHub Actions (nothing to install)
+#   1. add repo secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, OPENAI_API_KEY
+#   2. run the "Deploy TRALIX backend" workflow — it prints the worker URL
+
+# …or from your machine
+export OPENAI_API_KEY=sk-...
+./tools/deploy-backend.sh
+
+# …or self-host the app and the API together on any Node 18+ box
+OPENAI_API_KEY=sk-... node server/node.js --static
+```
+
+**Connect the two** — put the backend URL in `backend.json` (a public pointer,
+never a key) and push:
+
+```json
+{ "url": "https://tralix-backend.<your-subdomain>.workers.dev" }
+```
+
+The frontend resolves its API base from, in order: a device override saved in
+the app, `window.TRALIX_API_BASE`, `?api=https://…`, `backend.json`, then same
+origin. **Diagnostics** always reports which one is in use. For one device only,
+paste the URL in the Connect sheet (sidebar → connection row → **Set up**) and
+tap **Save & test** — that check performs a real upstream round-trip.
+
+### Environment / secrets
+
+### Environment / secrets
+
+| Variable | Where | Required | Notes |
+|---|---|---|---|
+| `OPENAI_API_KEY` | **server only** | yes | Never in the frontend, never in Git, never logged. |
+| `TRALIX_MODEL_FAST/_SMART/_CODE/_RESEARCH` | server | no | Override the tier → model mapping. |
+| `TRALIX_ALLOWED_ORIGINS` | server | no | Comma-separated CORS allowlist (default `*`). |
+| `TRALIX_ENABLE_WEB_SEARCH` | server | no | `true` enables the OpenAI web-search tool and flips the UI capability to *Available*. |
+| `OPENAI_BASE_URL` | server | no | Gateway/proxy override. |
+| `PORT` | server | no | Node adapter port (default 8787). |
+
+See `server/.env.example` and `server/README.md`.
+
+---
+
+## Model system
+
+Users see tiers; the backend resolves them to provider models.
+
+| Tier | Tagline | Default mapping | Reasoning |
+|---|---|---|---|
+| `tralix-fast` | Fast responses | `gpt-5-mini` | minimal |
+| `tralix-smart` | More capable reasoning | `gpt-5` | low |
+| `tralix-code` | Programming-focused | `gpt-5-codex` | medium |
+| `tralix-research` | Research-oriented | `gpt-5` | high |
+
+Every default is overridable by environment variable, so model churn never requires
+a frontend change. Provider details surface only in **Settings → Advanced**, and in
+debug mode the picker shows the resolved model.
+
+---
+
+## What is preserved from the previous build
+
+- All existing conversations, memories and settings — a real migration
+  (`jarvis.*.v1` → `tralix.*.v2`) runs on first launch and **leaves the old keys
+  untouched**, so nothing is lost and a rollback still finds its data.
+- Memory (now categorised: Personal · Preferences · Projects · Instructions · Other,
+  with edit/delete and an undo on delete).
+- Voice: push-to-talk speech recognition and spoken replies (now with voice choice,
+  speed, pitch, auto-speak and sentence-chunked playback for iOS).
+- PWA install, standalone display, safe-area handling, offline app shell.
+- Export / import backup, clear conversations, erase everything.
+- The optional bring-your-own-key provider mode (moved to Advanced, device-only).
+- The dark/light theme, the general look of the orb mark, and the deployment shape.
+
+## What is new
+
+- Sidebar information architecture: New chat, Search, Projects, conversation
+  history grouped Today / Yesterday / Previous 7 days, Settings, user area.
+  Collapsible on desktop, slide-out drawer on mobile.
+- Chat: streaming with *TRALIX is thinking…*, Stop generating, and per-response
+  actions (Copy · Regenerate · Read aloud · Like · Dislike · More →
+  Continue / Shorter / Longer / Explain / Rewrite / Save).
+- Markdown rendering with highlighted code blocks, language labels, copy buttons
+  and horizontal scrolling; tables, task lists, quotes, links.
+- The TRALIX system personality: precise, calm, professional, no filler enthusiasm,
+  with an explicit honesty policy about tools and live data.
+- Response styles (Concise / Balanced / Detailed) and personality modes
+  (TRALIX / JARVIS / Custom).
+- Settings split into General · AI · Voice · Memory · Data · Advanced, with a
+  diagnostics report and a developer debug panel.
+- Projects, chat search across titles *and* message text (with snippets), rename,
+  pin, archive with undo, delete with undo.
+- A tool layer (`assets/js/tools.js`) that describes real capabilities and refuses
+  to fake the ones that are not deployed.
+- Professional error states, keyboard shortcuts (⌘K, ⌘⇧O, ⌘/), a TRALIX status
+  indicator (idle · listening · thinking · generating · speaking · error) and
+  reduced-motion support.
+
+---
+
+## Mobile & scroll contract
+
+The layout is built so a long conversation scrolls with a finger on iPhone:
+
+- the document never scrolls; the message column does,
+- no `overflow: hidden` on `html`/`body` in normal use — the lock is reference-counted
+  and only while a drawer or modal is genuinely open, then always released
+  (including on page hide and via a safety valve),
+- no `position: fixed` page locking and no `touch-action: none` on the body,
+- the app is fitted to `visualViewport` (`--vvh` + explicit height), so the keyboard
+  cannot push the composer off screen,
+- `env(safe-area-inset-*)` is respected top and bottom; the composer sits inside the
+  layout, not fixed over it, and never blocks scrolling.
+
+---
+
+## Capabilities, honestly
+
+| Capability | State |
+|---|---|
+| Chat with streaming replies | **Available** (needs the backend configured) |
+| Memory, projects, voice, PWA offline shell | **Available** |
+| Web search | **Only** if the backend sets `TRALIX_ENABLE_WEB_SEARCH=true`; otherwise TRALIX says it cannot check live data |
+| Attachments (PDF/TXT/DOCX/images/code) | **Not deployed** — the button explains this instead of pretending |
+| Code execution, calendar, reminders, weather, news | **Not deployed** — listed in the tool layer as unavailable |
+
+`/api/health` is the source of truth: the UI marks a capability available only when
+the backend advertises it.
+
+---
+
+## Testing
+
+```bash
+npm run check      # syntax, JSON, asset refs, SW shell, secret scan, DOM contract
+npm test           # 121 logic tests (markdown, memory, migration, tools, scroll…)
+npm run verify     # both
+
+npm install --no-save jsdom
+npm run test:dom   # 62 integration checks: boots the real app in jsdom and drives
+                   # send/stream/error/sheets/drawer/search/projects/memory/transport
+```
+
+`npm run check` also fails the build if a key-like string, a `chatgpt.com`
+reference, or a frontend call to a provider API is ever committed.
+
+---
+
+## Project structure
+
+```
+index.html                     app shell: sidebar, chat, composer, all overlays
+assets/app.css                 design system (tokens, dark/light, mobile-first)
+assets/js/
+  app.js                       boot + wiring only
+  config.js                    identity, feature flags, backend URL resolution
+  errors.js                    one error vocabulary → friendly messages
+  store.js                     persistence + migration from the Jarvis build
+  models.js                    TRALIX tiers ↔ provider models
+  personality.js               TRALIX system prompt, styles, memory extraction
+  markdown.js  highlight.js    safe rendering and syntax highlighting
+  tools.js                     tool layer (availability-honest)
+  voice.js                     speech in / speech out (iOS-first)
+  scrolling.js                 viewport fitting + scroll-lock manager
+  api/client.js                fetch, timeouts, SSE parsing
+  api/backend.js               TRALIX backend client (default transport)
+  api/local.js                 optional device-only provider transport
+  api/chat.js                  transport selection + request assembly
+  ui/…                         sheets, feedback, status, messages, composer, chat,
+                               sidebar, search, memory, projects, models,
+                               settings, doctor
+server/
+  worker.js                    Cloudflare Worker: /api/chat, /api/health, /api/models
+  node.js                      Node 18+ adapter (optionally serves the frontend)
+  wrangler.toml  .env.example  deployment config
+sw.js                          offline app shell (API traffic is never cached)
+manifest.webmanifest           PWA metadata (TRALIX AI)
+tests/                         logic tests + jsdom integration test
+tools/check.mjs                static validation / secret scan
+```
+
+---
+
+## Privacy
+
+- Conversations, memories and settings live in **this browser**. Nothing is uploaded
+  to a TRALIX server; only the messages needed for a reply are sent to the backend,
+  which forwards them to OpenAI and stores nothing.
+- The backend never logs message content, never returns the key, and refuses to run
+  without one rather than pretending.
+- Sensitive content (card numbers, passwords, API keys, IDs) is refused by the memory
+  system even if you ask it to remember them.
+- Exports never include a key.
+
+## Licence
+
+UNLICENSED — private project.

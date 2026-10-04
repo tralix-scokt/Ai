@@ -1,0 +1,95 @@
+# ============================================================================
+# Deploys the TRALIX backend (server/worker.js) to Cloudflare Workers.
+#
+# The frontend on GitHub Pages stays static; only this API layer is deployed
+# separately. No secret is ever written into the repository — the key is read
+# from GitHub Actions secrets and pushed to the worker as an encrypted secret.
+#
+# One-time setup (repository → Settings → Secrets and variables → Actions):
+#   Secrets:  CLOUDFLARE_API_TOKEN     (Workers Scripts: Edit permission)
+#             CLOUDFLARE_ACCOUNT_ID
+#             OPENAI_API_KEY           (the real key — never committed)
+#   Variables (optional):
+#             TRALIX_ALLOWED_ORIGINS   default: the GitHub Pages origin below
+#             TRALIX_MODEL_SMART etc.  tier → model overrides
+#
+# After it runs, copy the printed worker URL into ./backend.json so the
+# GitHub Pages frontend knows where its backend is.
+# ============================================================================
+name: Deploy TRALIX backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      allowed_origins:
+        description: 'Comma-separated origins allowed to call the API'
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-backend.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tralix-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the required secrets exist
+        run: |
+          missing=0
+          [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] || { echo "::error::CLOUDFLARE_API_TOKEN is not set"; missing=1; }
+          [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ] || { echo "::error::CLOUDFLARE_ACCOUNT_ID is not set"; missing=1; }
+          [ -n "${{ secrets.OPENAI_API_KEY }}" ] || { echo "::error::OPENAI_API_KEY is not set"; missing=1; }
+          exit $missing
+
+      - name: Deploy the worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
+          command: >-
+            deploy worker.js
+            --name tralix-backend
+            --var TRALIX_ALLOWED_ORIGINS:${{ github.event.inputs.allowed_origins || vars.TRALIX_ALLOWED_ORIGINS || 'https://tralix-scokt.github.io' }}
+            --var TRALIX_ENABLE_WEB_SEARCH:${{ vars.TRALIX_ENABLE_WEB_SEARCH || 'false' }}
+            ${{ vars.TRALIX_MODEL_SMART && format('--var TRALIX_MODEL_SMART:{0}', vars.TRALIX_MODEL_SMART) || '' }}
+
+      # The key is pushed straight from the runner to Cloudflare as an encrypted
+      # secret. It is never echoed, never written to a file and never committed.
+      - name: Set the OpenAI key as a worker secret
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
+          quiet: true
+          command: secret put OPENAI_API_KEY
+          secrets: |
+            OPENAI_API_KEY
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Verify the deployment answers
+        if: steps.deploy.outputs.command-output != ''
+        run: |
+          URL=$(echo "${{ steps.deploy.outputs.deployment-url }}" | tr -d '[:space:]')
+          echo "worker URL: $URL"
+          echo "### TRALIX backend deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Health: \`$URL/api/health?probe=1\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Next: put \`$URL\` in \`backend.json\` (url field) and push." >> "$GITHUB_STEP_SUMMARY"
+          curl -fsS "$URL/api/health" | head -c 600 || echo "health check pending — run it again in a minute"

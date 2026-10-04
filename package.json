@@ -1,0 +1,31 @@
+{
+  "name": "tralix-ai",
+  "version": "2.0.0",
+  "private": true,
+  "description": "TRALIX AI \u2014 intelligent AI assistant. Static PWA frontend plus a secure OpenAI-backed API layer.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/logic.test.mjs",
+    "test:dom": "node tests/dom.test.mjs",
+    "check": "node tools/check.mjs",
+    "verify": "npm run check && npm run test && npm run test:backend && npm run test:dom",
+    "serve": "node server/node.js --static",
+    "backend": "node server/node.js",
+    "test:backend": "node tests/backend.test.mjs",
+    "fake:openai": "node tests/fake-openai.mjs 8799"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "tralix",
+    "ai-assistant",
+    "pwa",
+    "openai",
+    "responses-api"
+  ],
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "jsdom": "^26.0.0"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "tralix-backend",
+  "description": "TRALIX backend — holds the OpenAI key, serves /api/chat",
+  "repository": "https://github.com/tralix-scokt/Ai",
+  "rootDirectory": ".",
+  "startCommand": "node server/node.js",
+  "healthCheckPath": "/api/health?probe=1",
+  "env": {
+    "NODE_VERSION": { "value": "20", "sync": false },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key (server only, never committed)",
+      "sync": false
+    },
+    "TRALIX_ALLOWED_ORIGINS": {
+      "value": "https://tralix-scokt.github.io",
+      "sync": false
+    },
+    "TRALIX_ENABLE_WEB_SEARCH": {
+      "value": "false",
+      "sync": false
+    }
+  },
+  "domains": [
+    { "name": "" }
+  ],
+  "numInstances": 1,
+  "plan": "starter",
+  "region": "oregon"
+}
