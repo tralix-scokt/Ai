@@ -6,7 +6,7 @@ services:
     name: jarvis-ai
     runtime: node
     region: oregon
-    plan: starter
+    plan: free
     buildCommand: npm run check
     startCommand: npm run serve
     healthCheckPath: /api/health

@@ -75,6 +75,11 @@ if (renderConfig.startCommand === 'node server/node.js --static') {
 } else {
   bad('render.json start command', 'must serve the frontend and API together with --static');
 }
+if (renderConfig.plan === 'free') {
+  ok('render.json selects the Free plan');
+} else {
+  bad('render.json plan', 'must remain on the Free plan');
+}
 const keyEnv = renderConfig.env?.OPENAI_API_KEY;
 if (keyEnv?.sync === false && !Object.hasOwn(keyEnv, 'value')) {
   ok('render.json never stores the optional provider key');
@@ -90,10 +95,11 @@ if (/^\s*-\s*key:\s*OPENAI_API_KEY\s*$/m.test(renderBlueprint)) {
 }
 if (/type:\s*web/.test(renderBlueprint)
   && /startCommand:\s*npm run serve/.test(renderBlueprint)
-  && /healthCheckPath:\s*\/api\/health/.test(renderBlueprint)) {
-  ok('Render Blueprint serves the frontend and API on one origin');
+  && /healthCheckPath:\s*\/api\/health/.test(renderBlueprint)
+  && /plan:\s*free/.test(renderBlueprint)) {
+  ok('Render Blueprint serves the frontend and API on the Free plan');
 } else {
-  bad('render.yaml', 'expected a Node web service using npm run serve and /api/health');
+  bad('render.yaml', 'expected a Free Node web service using npm run serve and /api/health');
 }
 
 /* 3 ─ referenced assets ---------------------------------------------------- */

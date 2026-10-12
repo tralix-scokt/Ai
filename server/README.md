@@ -95,7 +95,9 @@ Service with the JARVIS static app and `/api` together:
 
 For a new service, use **New → Blueprint** in Render and connect this repository
 and the branch you want to deploy. The blueprint currently names the service
-`jarvis-ai` and selects the `starter` plan; review the plan before creation.
+`jarvis-ai` and selects the `free` plan. Free services may spin down when idle,
+so the first request after a quiet period can take longer; review Render's
+current free-tier limits before creation.
 
 If you already have a Render backend service, update it instead of creating a
 duplicate: keep its assigned name, but use the build/start/health settings above.
