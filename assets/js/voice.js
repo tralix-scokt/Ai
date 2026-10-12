@@ -49,29 +49,51 @@ export class Listener {
 
     this.rec = null;
     this.active = false;
+    this.starting = false;
     this.finalText = '';
+    this.currentText = '';
     this.manualStop = false;
     this.restarting = false;
+    this.lastSpeechAt = 0;
+    this.silenceTimer = null;
+    this.finishTimer = null;
   }
 
   get supported() { return Boolean(SR); }
 
   start() {
     if (!SR) {
-      this.onError('This browser cannot do speech input. Try Safari on iPhone.');
+      this.onError('This browser does not support speech input. Try keyboard dictation instead.');
       return false;
     }
-    if (this.active) return true;
+    if (this.active || this.starting) return true;
 
     this.manualStop = false;
     this.finalText = '';
+    this.currentText = '';
+    this.lastSpeechAt = Date.now();
     this._emitted = false;
-    this._spawn();
-    return true;
+    this.starting = true;
+    return this._spawn();
   }
 
   _spawn() {
-    const rec = new SR();
+    let rec;
+    try {
+      rec = new SR();
+    } catch (error) {
+      this.starting = false;
+      this.active = false;
+      this.manualStop = true;
+      if (error?.name !== 'InvalidStateError') {
+        setVoiceState('error');
+        this.onError(error?.name === 'NotAllowedError'
+          ? 'Microphone access was denied. Check Safari microphone permissions and try again.'
+          : 'Could not initialize speech recognition. Try the keyboard dictation fallback.');
+      }
+      this._finish();
+      return false;
+    }
     this.rec = rec;
 
     rec.lang = navigator.language || 'en-US';
@@ -81,9 +103,11 @@ export class Listener {
 
     rec.onstart = () => {
       this.active = true;
+      this.starting = false;
       this.restarting = false;
       setVoiceState('listening');
       this.onStart();
+      this._watchForSilence();
     };
 
     rec.onresult = (event) => {
@@ -95,33 +119,44 @@ export class Listener {
         else interim += txt;
       }
       const shown = (this.finalText + (interim ? ' ' + interim : '')).trim();
-      if (shown) this.onResult(shown, false);
+      if (shown) {
+        this.currentText = shown;
+        this.lastSpeechAt = Date.now();
+        this.onResult(shown, false);
+      }
     };
 
     rec.onerror = (event) => {
       const code = event.error;
-      // 'no-speech' / 'aborted' happen constantly on iOS — treat as soft
+      // These are soft on iOS. The silence watchdog below ends an actually
+      // silent session without turning the browser's normal restart into an error.
       if (code === 'no-speech' || code === 'aborted') return;
 
       this.active = false;
+      this.starting = false;
+      this._clearTimers();
       setVoiceState('error');
 
       const messages = {
-        'not-allowed':    'Microphone access is blocked. On iPhone: Settings → Safari → Microphone, then reload.',
+        'not-allowed': 'Microphone access is blocked. On iPhone: Settings → Safari → Microphone, then reload.',
         'service-not-allowed': 'Speech recognition is not allowed here. Make sure the page is on HTTPS.',
-        'audio-capture':  'No microphone found.',
-        'network':        'Speech recognition needs a connection right now.',
+        'audio-capture': 'No microphone was found or it is already in use.',
+        'network': 'Speech recognition needs an internet connection in this browser.',
         'language-not-supported': 'That language is not supported for dictation.',
       };
-      this.onError(messages[code] || `Microphone error: ${code}`);
+      this.onError(messages[code] || `Microphone error: ${code || 'unknown'}`);
     };
 
     rec.onend = () => {
-      // iOS cuts recognition off every few seconds — restart while the user is
-      // still holding the button, otherwise finish cleanly.
+      this.starting = false;
+      // iOS stops recognition after a short interval. Restart it only while the
+      // user still has an active session; never restart after Stop or an error.
       if (!this.manualStop && this.active) {
         this.restarting = true;
-        try { rec.start(); } catch { this.active = false; this._finish(); }
+        try { rec.start(); } catch {
+          this.active = false;
+          this._finish();
+        }
         return;
       }
       this.active = false;
@@ -130,15 +165,58 @@ export class Listener {
 
     try {
       rec.start();
-    } catch {
-      // starting twice throws on iOS — ignore, it is already running
+      return true;
+    } catch (error) {
+      this.starting = false;
+      this.active = false;
+      this.manualStop = true;
+      if (error?.name !== 'InvalidStateError') {
+        setVoiceState('error');
+        this.onError(error?.name === 'NotAllowedError'
+          ? 'Microphone access was denied. Check Safari microphone permissions and try again.'
+          : 'Could not start speech recognition. Try the keyboard dictation fallback.');
+      }
+      // Resolve the pending UI lifecycle too: otherwise a synchronous browser
+      // start failure can leave the composer stuck in its recording state.
+      this._finish();
+      return false;
     }
   }
 
+  _watchForSilence() {
+    this._clearSilenceTimer();
+    this.silenceTimer = setInterval(() => {
+      if (!this.active || this.manualStop) return;
+      if (Date.now() - this.lastSpeechAt < 14000) return;
+
+      this.manualStop = true;
+      this.active = false;
+      this._clearSilenceTimer();
+      if (!this.finalText.trim() && !this.currentText.trim()) {
+        this.onError('No speech was detected. Tap the microphone to try again, or use keyboard dictation.');
+      }
+      try { this.rec?.stop(); } catch { this._finish(); }
+    }, 1800);
+  }
+
+  _clearSilenceTimer() {
+    if (this.silenceTimer) clearInterval(this.silenceTimer);
+    this.silenceTimer = null;
+  }
+
+  _clearTimers() {
+    this._clearSilenceTimer();
+    if (this.finishTimer) clearTimeout(this.finishTimer);
+    this.finishTimer = null;
+  }
+
   _finish() {
-    if (this._emitted) return;        // onend and stop() can both land here
+    if (this._emitted) return;        // onend and the stop safety timer can both land here
     this._emitted = true;
-    const text = this.finalText.trim();
+    this.active = false;
+    this.starting = false;
+    this._clearTimers();
+    const text = (this.currentText || this.finalText).trim();
     if (voiceState === 'listening') setVoiceState('idle');
     this.onResult(text, true);
     this.onEnd(text);
@@ -146,15 +224,27 @@ export class Listener {
 
   stop() {
     this.manualStop = true;
-    this.active = false;
-    try { this.rec?.stop(); } catch {}
-    this._finish();
-    return this.finalText.trim();
+    this._clearSilenceTimer();
+    if (!this.active && !this.starting) {
+      this._finish();
+      return (this.currentText || this.finalText).trim();
+    }
+    try {
+      this.rec?.stop();
+      // Let the browser deliver a final result before the safety finish.
+      this.finishTimer = setTimeout(() => this._finish(), 1400);
+    } catch {
+      this._finish();
+    }
+    return (this.currentText || this.finalText).trim();
   }
 
   abort() {
     this.manualStop = true;
     this.active = false;
+    this.starting = false;
+    this._emitted = true;             // an abort must never finalize/submit a partial transcript
+    this._clearTimers();
     try { this.rec?.abort(); } catch {}
     if (voiceState === 'listening') setVoiceState('idle');
   }

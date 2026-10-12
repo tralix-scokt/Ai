@@ -26,7 +26,7 @@
 export const MODELS = [
   {
     id: 'tralix-fast',
-    label: 'TRALIX Fast',
+    label: 'JARVIS Fast',
     tagline: 'Fast responses',
     description: 'Quick, low-latency answers for everyday questions and drafting.',
     speed: 'fast',
@@ -36,7 +36,7 @@ export const MODELS = [
   },
   {
     id: 'tralix-smart',
-    label: 'TRALIX Smart',
+    label: 'JARVIS Smart',
     tagline: 'More capable reasoning',
     description: 'The balanced default: strong reasoning with comfortable speed.',
     speed: 'balanced',
@@ -47,7 +47,7 @@ export const MODELS = [
   },
   {
     id: 'tralix-code',
-    label: 'TRALIX Code',
+    label: 'JARVIS Code',
     tagline: 'Programming-focused',
     description: 'Tuned for reading, writing and explaining code, diffs and errors.',
     speed: 'balanced',
@@ -57,7 +57,7 @@ export const MODELS = [
   },
   {
     id: 'tralix-research',
-    label: 'TRALIX Research',
+    label: 'JARVIS Research',
     tagline: 'Research-oriented',
     description: 'Slower, deeper answers with structured detail for complex questions.',
     speed: 'deep',

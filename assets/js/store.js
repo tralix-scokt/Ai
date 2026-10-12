@@ -39,8 +39,9 @@ export const DEFAULT_SETTINGS = {
   /* ai */
   model: 'tralix-smart',         // TRALIX model id — see models.js
   responseStyle: 'balanced',     // 'concise' | 'balanced' | 'detailed'
-  personality: 'tralix',         // 'tralix' | 'jarvis' | 'custom'
+  personality: 'jarvis',         // 'tralix' (direct) | 'jarvis' | 'custom'
   persona: '',                   // custom instructions (only used with 'custom')
+  assistantMode: 'auto',         // 'auto' (demo until verified) | 'demo' | 'live'
 
   /* voice */
   voice: {
@@ -188,6 +189,7 @@ export function normaliseSettings(raw = {}) {
     version: SCHEMA_VERSION,
   };
   if (!/^tralix-/.test(settings.model)) settings.model = DEFAULT_SETTINGS.model;
+  if (!['auto', 'demo', 'live'].includes(settings.assistantMode)) settings.assistantMode = 'auto';
   return { settings, changed: JSON.stringify(settings) !== JSON.stringify(raw) };
 }
 
@@ -249,7 +251,7 @@ export const MEMORY_CATEGORIES = [
   { id: 'personal', label: 'Personal', hint: 'Name, location, role, family' },
   { id: 'preferences', label: 'Preferences', hint: 'How you like things done' },
   { id: 'projects', label: 'Projects', hint: 'Things you are working on' },
-  { id: 'instructions', label: 'Instructions', hint: 'Standing rules for TRALIX' },
+  { id: 'instructions', label: 'Instructions', hint: 'Standing rules for JARVIS' },
   { id: 'other', label: 'Other', hint: 'Everything else' },
 ];
 
@@ -369,6 +371,11 @@ function normaliseChat(raw = {}) {
         ...(m.code ? { code: m.code } : {}),
         ...(m.model ? { model: m.model } : {}),
         ...(m.feedback ? { feedback: m.feedback } : {}),
+        ...(m.demo ? { demo: true } : {}),
+        ...(m.incomplete ? { incomplete: true } : {}),
+        ...(m.hidden ? { hidden: true } : {}),
+        ...(m.errorTitle ? { errorTitle: String(m.errorTitle) } : {}),
+        ...(m.retryable === false ? { retryable: false } : {}),
       })).slice(-LIMITS.maxMessagesPerChat)
     : [];
 
@@ -492,7 +499,7 @@ export function exportAll() {
 }
 
 export function importAll(data) {
-  if (!data || typeof data !== 'object') throw new Error('Not a TRALIX backup');
+  if (!data || typeof data !== 'object') throw new Error('Not a JARVIS backup');
   const legacySettings = data.app === 'jarvis' ? { ...data.settings, apiKey: '' } : data.settings;
   const current = loadSettings();
 

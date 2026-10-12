@@ -26,15 +26,30 @@ const ICON = {
 const svg = (path, cls = '') => `<svg viewBox="0 0 24 24" aria-hidden="true" class="${cls}">${path}</svg>`;
 
 /** The identity row above a TRALIX reply. */
-function headHtml(modelLabel = '') {
+function headHtml(modelLabel = '', demo = false) {
   return `<div class="msg-head">
-    <span class="msg-avatar" aria-hidden="true">T</span>
-    <span class="msg-name">TRALIX</span>
-    ${modelLabel ? `<span class="msg-model">· ${escapeHtml(modelLabel)}</span>` : ''}
+    <span class="msg-avatar" aria-hidden="true">J</span>
+    <span class="msg-name">JARVIS</span>
+    ${demo
+      ? '<span class="msg-demo-tag">LOCAL DEMO · NOT AI</span>'
+      : (modelLabel ? `<span class="msg-model">· ${escapeHtml(modelLabel)}</span>` : '')}
   </div>`;
 }
 
-export function typingHtml(label = 'TRALIX is thinking…') {
+function messageTime(ts) {
+  const date = new Date(Number(ts) || Date.now());
+  const label = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
+  return `<time class="msg-time" datetime="${date.toISOString()}" title="${date.toLocaleString()}">${escapeHtml(label)}</time>`;
+}
+
+function messageState(msg) {
+  if (msg.error) return 'Needs attention';
+  if (msg.pending) return 'Processing';
+  if (msg.incomplete) return 'Stopped early';
+  return msg.demo ? 'Local demo sample' : 'Delivered';
+}
+
+export function typingHtml(label = 'JARVIS is thinking…') {
   return `<div class="typing"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>${escapeHtml(label)}</div>`;
 }
 
@@ -52,15 +67,19 @@ export function messageNode(msg, ctx = {}) {
 
   if (msg.role === 'user') {
     el.className = 'msg msg-user';
-    el.innerHTML = `<div class="bubble">${escapeHtml(msg.text)}</div>
-      <div class="msg-actions"></div>`;
+    el.innerHTML = `<div class="user-message-stack">
+      <div class="bubble">${escapeHtml(msg.text)}</div>
+      <div class="msg-meta">${messageTime(msg.ts)}<span class="msg-state">Sent</span></div>
+      <div class="msg-actions"></div>
+    </div>`;
     buildUserActions(el, msg, ctx);
     return el;
   }
 
-  el.className = `msg msg-bot${msg.error ? ' msg-error' : ''}${msg.incomplete ? ' incomplete' : ''}`;
-  el.innerHTML = `${headHtml(ctx.streaming || msg.pending ? ctx.modelLabel : ctx.modelLabel)}
+  el.className = `msg msg-bot${msg.error ? ' msg-error' : ''}${msg.incomplete ? ' incomplete' : ''}${msg.demo ? ' msg-demo' : ''}`;
+  el.innerHTML = `${headHtml(ctx.modelLabel, msg.demo)}
     <div class="msg-body"></div>
+    <div class="msg-meta">${messageTime(msg.ts)}<span class="msg-state">${escapeHtml(messageState(msg))}</span></div>
     <div class="msg-actions"></div>`;
 
   const body = el.querySelector('.msg-body');
@@ -151,7 +170,7 @@ function buildErrorActions(node, msg, ctx) {
     bar.appendChild(actionButton({
       label: 'Connection',
       icon: ICON.link,
-      title: 'Check the TRALIX backend connection',
+      title: 'Check the JARVIS backend connection',
       onClick: () => ctx.onAction?.('fix-connection', msg),
     }));
   }
@@ -285,5 +304,5 @@ export function dayDivider(label) {
 }
 
 export function messageMeta(msg) {
-  return `${msg.role === 'assistant' ? 'TRALIX' : 'You'} · ${relTime(msg.ts)}`;
+  return `${msg.role === 'assistant' ? 'JARVIS' : 'You'} · ${relTime(msg.ts)}`;
 }

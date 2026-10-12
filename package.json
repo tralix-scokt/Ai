@@ -2,23 +2,24 @@
   "name": "tralix-ai",
   "version": "2.0.0",
   "private": true,
-  "description": "TRALIX AI \u2014 intelligent AI assistant. Static PWA frontend plus a secure OpenAI-backed API layer.",
+  "description": "JARVIS AI \u2014 personal intelligence assistant. Static PWA frontend with an explicit local demo and secure AI backend.",
   "type": "module",
   "scripts": {
-    "test": "node tests/logic.test.mjs",
+    "test": "node tests/logic.test.mjs && node tests/voice.test.mjs",
     "test:dom": "node tests/dom.test.mjs",
     "check": "node tools/check.mjs",
     "verify": "npm run check && npm run test && npm run test:backend && npm run test:dom",
     "serve": "node server/node.js --static",
     "backend": "node server/node.js",
     "test:backend": "node tests/backend.test.mjs",
-    "fake:openai": "node tests/fake-openai.mjs 8799"
+    "fake:openai": "node tests/fake-openai.mjs 8799",
+    "test:voice": "node tests/voice.test.mjs"
   },
   "engines": {
     "node": ">=18"
   },
   "keywords": [
-    "tralix",
+    "jarvis",
     "ai-assistant",
     "pwa",
     "openai",

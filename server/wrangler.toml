@@ -3,8 +3,9 @@
 #   npx wrangler deploy server/worker.js --name tralix-backend
 #   npx wrangler secret put OPENAI_API_KEY
 #
-# Then put the worker URL in ./backend.json so the GitHub Pages frontend finds
-# it, or paste it into TRALIX → Settings → Advanced → Backend URL for one device.
+# This is an optional split deployment. Set TRALIX_ALLOWED_ORIGINS to the
+# Render frontend's actual origin and use the worker URL in backend.json. Leave
+# backend.json empty for the combined Render app/API service.
 #
 # The key is a secret, never a var:
 #   npx wrangler secret put OPENAI_API_KEY
@@ -14,9 +15,9 @@ main = "worker.js"
 compatibility_date = "2025-06-01"
 
 [vars]
-# Lock this to your deployed frontend origin once it works:
-#   "https://tralix-scokt.github.io,http://localhost:8787"
-TRALIX_ALLOWED_ORIGINS = "https://tralix-scokt.github.io"
+# For the Render frontend, set this to its actual public origin:
+#   "https://jarvis-ai.onrender.com,http://localhost:8787"
+TRALIX_ALLOWED_ORIGINS = "https://jarvis-ai.onrender.com"
 TRALIX_ENABLE_WEB_SEARCH = "false"
 
 # Secrets (set with `wrangler secret put`, never in this file):

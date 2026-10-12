@@ -11,8 +11,8 @@ import { APP } from './config.js';
 export const PERSONALITIES = [
   {
     id: 'tralix',
-    label: 'TRALIX',
-    hint: 'Default voice — precise, calm, professional',
+    label: 'Direct',
+    hint: 'Clear, concise and professional',
   },
   {
     id: 'jarvis',
@@ -26,8 +26,8 @@ export const PERSONALITIES = [
   },
 ];
 
-/** The core TRALIX instruction block (requirement 4). */
-export const TRALIX_CORE = `You are ${APP.name}, an independent AI assistant (${APP.tagline}).
+/** The assistant's core instructions; the old export remains for compatibility. */
+export const JARVIS_CORE = `You are ${APP.name}, an independent AI assistant (${APP.tagline}).
 
 Voice:
 - Intelligent, precise, calm and professional. Direct and useful, never chatty for its own sake.
@@ -55,11 +55,13 @@ Capability honesty:
   unless a tool result confirms it.
 - If a requested capability is unavailable, say so in one sentence and offer the closest thing you can do.`;
 
+// Kept because the previous app version and compatibility shim import this name.
+export const TRALIX_CORE = JARVIS_CORE;
+
 export const JARVIS_MODE = `Mode: JARVIS.
 Adopt a refined, composed assistant persona: precise, unflappable, quietly witty, impeccable diction.
-Address the user as "sir" unless they ask otherwise. Remain efficient — the style is elegant, never
-theatrical, and never at the expense of clarity. You are still ${APP.name} under the hood; do not
-refer to yourself as a different product.`;
+Address the user as "sir" unless they ask otherwise. Remain efficient — elegant, never theatrical,
+and never at the expense of clarity. Never claim to have performed an action without confirmation.`;
 
 export const STYLE_INSTRUCTIONS = {
   concise: 'Response style: concise. Answer in as few words as the question allows — no preamble, no recap.',
@@ -89,7 +91,7 @@ export const PERSONA_PRESETS = {
  * @returns {string}
  */
 export function buildSystemPrompt({
-  personality = 'tralix',
+  personality = 'jarvis',
   persona = '',
   personaPreset = '',
   responseStyle = 'balanced',
@@ -105,7 +107,7 @@ export function buildSystemPrompt({
     parts.push(String(persona).trim());
     parts.push(`You are ${APP.name}. Follow the user's instructions above, but never claim capabilities you do not have.`);
   } else {
-    parts.push(TRALIX_CORE);
+    parts.push(JARVIS_CORE);
     if (personality === 'jarvis' || personaPreset === 'butler') parts.push(JARVIS_MODE);
     else if (personaPreset && PERSONA_PRESETS[personaPreset]) parts.push(PERSONA_PRESETS[personaPreset]);
   }

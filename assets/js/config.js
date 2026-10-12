@@ -7,10 +7,10 @@
    ========================================================================== */
 
 export const APP = {
-  name: 'TRALIX AI',
-  shortName: 'TRALIX',
-  tagline: 'Intelligent AI Assistant',
-  version: '2.0.0',
+  name: 'JARVIS AI',
+  shortName: 'JARVIS',
+  tagline: 'Personal Intelligence System',
+  version: '2.1.0',
   supportEmail: '',                       // optional, shown in error states
 };
 

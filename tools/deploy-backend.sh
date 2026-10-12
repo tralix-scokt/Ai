@@ -11,15 +11,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ORIGIN="${TRALIX_ALLOWED_ORIGINS:-https://tralix-scokt.github.io}"
+ORIGIN="${TRALIX_ALLOWED_ORIGINS:-https://jarvis-ai.onrender.com}"
 
 if [ "${1:-}" = "--node" ]; then
   cat <<EOF
-Self-host the TRALIX backend (no Cloudflare account needed):
+Self-host the JARVIS app and API on one origin (no Cloudflare account needed):
 
   OPENAI_API_KEY=… TRALIX_ALLOWED_ORIGINS="$ORIGIN" node server/node.js --static
 
-Then set the same URL in ./backend.json ({"url": "https://your-host"}) and push.
+Leave ./backend.json's url empty for this combined deployment. Set a public API
+URL there only if the frontend and API are hosted separately.
 EOF
   exit 0
 fi

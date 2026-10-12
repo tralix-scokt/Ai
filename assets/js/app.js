@@ -1,5 +1,5 @@
 /* ==========================================================================
-   app.js — TRALIX AI boot and wiring.
+   app.js — JARVIS AI boot and wiring.
 
    This file only assembles modules: state, persistence, transport, voice and
    the UI pieces live in their own files. Nothing here talks to a provider
@@ -14,6 +14,7 @@ import * as Voice from './voice.js';
 import { bindVisualViewport, forceReleaseScrollLock, scrollToEnd, isNearBottom } from './scrolling.js';
 import { TOOLS } from './tools.js';
 import { modelLabel } from './models.js';
+import { isDemoMode, createAssistantUI } from './ui/assistant.js';
 
 import { initSheets, openSheet, closeSheet } from './ui/sheets.js';
 import { initToast, toast } from './ui/feedback.js';
@@ -50,7 +51,7 @@ function applyTheme() {
   document.documentElement.dataset.theme = theme;
   for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
     if (meta.getAttribute('media')) continue;
-    meta.setAttribute('content', theme === 'dark' ? '#0a0b0f' : '#ffffff');
+    meta.setAttribute('content', theme === 'dark' ? '#050812' : '#ffffff');
   }
 }
 
@@ -76,52 +77,71 @@ function persistChat() {
 }
 
 /* ================================= voice ================================== */
+let recognitionMessage = '';
 const listener = new Voice.Listener({
   onResult: (text) => {
     setStatus('listening');
     $('#voiceLabel').textContent = text ? text : 'Listening…';
   },
   onError: (message) => {
+    recognitionMessage = message;
+    listening = false;
+    composer?.setRecording(false);
     toast(message, { tone: 'error', ms: 4200 });
     setVoiceBar(null);
-    setStatus('idle');
+    setError(message);
   },
   onStart: () => {
-    setVoiceBar({ state: 'listening', label: 'Listening…', hint: 'tap the mic again to stop' });
+    setVoiceBar({ state: 'listening', label: 'Listening…', hint: 'Your words will appear here before sending' });
   },
   onEnd: (finalText) => {
+    listening = false;
     setVoiceBar(null);
-    setStatus('idle');
     composer.setRecording(false);
     if (finalText && finalText.trim().length > 1) {
+      setStatus('idle');
       composer.setValue(finalText.trim(), { focus: false });
       composer.el.form.requestSubmit();
+    } else if (recognitionMessage) {
+      setError(recognitionMessage);
     } else {
-      toast('Did not catch that — try again', { ms: 2000 });
+      setStatus('idle');
+      toast('No speech detected. Try again or use keyboard dictation.', { ms: 2600 });
     }
+    recognitionMessage = '';
   },
 });
 
 let listening = false;
 
+function stopListening() {
+  if (!listening && !listener.active) return;
+  listening = false;
+  listener.stop();
+  composer.setRecording(false);
+  setVoiceBar(null);
+}
+
 function toggleListening() {
   if (!Voice.sttSupported) {
-    toast('Voice input needs Safari on iPhone or Chrome on Android.', { ms: 3600, tone: 'error' });
+    toast('Speech recognition is not supported in this browser. Type a message or use the iPhone keyboard microphone.', { ms: 4200, tone: 'error' });
     return;
   }
   if (listening) {
-    listener.stop();
-    listening = false;
-    composer.setRecording(false);
-    setVoiceBar(null);
+    stopListening();
     return;
   }
   Voice.stopSpeaking();
   chat.stopSpeaking();
+  recognitionMessage = '';
   listening = true;
   composer.setRecording(true);
   haptic(12);
-  listener.start();
+  const started = listener.start();
+  if (!started) {
+    listening = false;
+    composer.setRecording(false);
+  }
 }
 
 function setVoiceBar(info) {
@@ -165,6 +185,8 @@ const settingsUi = createSettings({
     state.settings = Store.loadSettings();
     applyTheme(); applyDensity(); applyLanguage();
     state.chat = Store.loadChats()[0] || Store.newChat();
+    assistantUI.setViewMode(state.chat.messages?.some(message => !message.hidden) ? 'conversation' : 'immersive', { notify: false });
+    assistantUI.updateRuntimeMode();
     chat.render(); sidebar.render(); sidebar.refreshCounts();
     memoryManagerSettings.refresh(); memoryManagerSheet.refresh();
     settingsUi.refresh();
@@ -222,6 +244,8 @@ const chat = createChatController({
   onOpenConnect: () => openConnect(),
   onMemoryChanged: () => { sidebar.refreshCounts(); memoryManagerSettings.refresh(); },
   getHealth: () => state.health,
+  isDemoMode: () => isDemoMode(state.settings, state.health),
+  onViewModeChange: (mode) => assistantUI.setViewMode(mode, { notify: false }),
   onSpeakingChange: () => {},
   // A completed round-trip is the strongest possible proof of a working
   // connection, so it updates the reported state immediately.
@@ -229,6 +253,20 @@ const chat = createChatController({
     if (!state.health?.ok) refreshHealth({ force: true });
     else state.healthAt = Date.now();
   },
+});
+
+const assistantUI = createAssistantUI({
+  getSettings: () => state.settings,
+  saveSettings,
+  getHealth: () => state.health,
+  onOpenConnect: () => openConnect(),
+  onModeChange: () => chat.render(),
+});
+
+$('#btnStopListening')?.addEventListener('click', stopListening);
+$('#btnStopSpeaking')?.addEventListener('click', () => chat.stopSpeaking());
+Voice.onVoiceState((next) => {
+  if (['idle', 'listening', 'speaking', 'error'].includes(next)) setStatus(next);
 });
 
 /* ============================== chrome bits ============================== */
@@ -245,15 +283,15 @@ function updateModelChip() {
 
 /**
  * Connection state is separate from the activity indicator: the ring shows what
- * TRALIX is doing right now, `connText` says whether a backend is actually able
+ * JARVIS is doing right now, `connText` says whether a backend is actually able
  * to answer. Six honest states — never a vague "offline" when the truth is
  * "the server has no key".
  */
 export const CONNECTION_TEXT = {
-  checking: 'Checking backend…',
-  ready: 'TRALIX backend · connected',
-  busy: 'TRALIX backend · rate limited',
-  unconfigured: 'Backend has no API key',
+  checking: 'Checking secure link…',
+  ready: 'Secure AI link · connected',
+  busy: 'Secure AI link · rate limited',
+  unconfigured: 'Backend setup required',
   unauthorized: 'Backend key rejected',
   unreachable: 'Backend unreachable',
   upstream: 'AI service unreachable',
@@ -319,6 +357,8 @@ async function refreshHealth({ force = false, probe = false } = {}) {
       state.health = health;
       state.healthAt = Date.now();
       updateConnText();
+      assistantUI.updateConnection(health);
+      if (assistantUI.viewMode === 'immersive') chat.render();
       return health;
     } finally {
       healthInFlight = null;
@@ -349,18 +389,18 @@ function describeHealth(health) {
       return {
         ok: true,
         line: `Connected · ${health.provider || 'openai'}${health.model ? ` · ${health.model}` : ''}${health.latencyMs ? ` · ${health.latencyMs}ms` : ''}`,
-        explain: `TRALIX verified the connection to the AI service at ${where}. Messages are sent to the backend for a reply and are not stored on the server.`,
+        explain: `JARVIS verified the connection to the AI service at ${where}. Messages are sent to the backend for a reply and are not stored on the server.`,
       };
     case 'busy':
-      return { ok: true, line: 'Rate limited, but the backend is configured', explain: health.message || 'The AI service is throttling this key. TRALIX will retry shortly.' };
+      return { ok: true, line: 'Rate limited, but the backend is configured', explain: health.message || 'The AI service is throttling this key. JARVIS will retry when the backend is available.' };
     case 'unconfigured':
-      return { ok: false, line: 'Backend reachable · no API key set', explain: 'The TRALIX backend answered but has no OPENAI_API_KEY. Set it as a server secret (server/README.md) — the key never belongs in this frontend.' };
+      return { ok: false, line: 'Backend reachable · no API key set', explain: 'The JARVIS backend answered but has no OPENAI_API_KEY. Set it as a server secret (server/README.md) — the key never belongs in this frontend.' };
     case 'unauthorized':
       return { ok: false, line: 'Backend reachable · the key was rejected', explain: 'The AI service rejected the server key. Check OPENAI_API_KEY on the backend.' };
     case 'upstream':
-      return { ok: false, line: 'Backend reachable · AI service unreachable', explain: 'The TRALIX backend is up but cannot reach the AI service from its network. Check OPENAI_BASE_URL or the provider status.' };
+      return { ok: false, line: 'Backend reachable · AI service unreachable', explain: 'The JARVIS backend is up but cannot reach the AI service from its network. Check OPENAI_BASE_URL or the provider status.' };
     default:
-      return { ok: false, line: 'No response from the backend', explain: 'This app needs the TRALIX backend to be reachable. The backend holds the OpenAI key — it is never present in this frontend. Deploy server/ and paste its URL below.' };
+      return { ok: false, line: 'No response from the backend', explain: 'This app needs the JARVIS backend to be reachable. The backend holds the OpenAI key — it is never present in this frontend. Deploy server/ and paste its URL below.' };
   }
 }
 
@@ -396,7 +436,7 @@ $('#btnConnectSave')?.addEventListener('click', async () => {
   statusEl.className = `status-line ${view.ok ? 'ok' : 'bad'}`;
   $('#connectExplanation').textContent = view.explain;
   modelPicker.render();
-  toast(view.ok ? 'TRALIX connected' : view.line, { tone: view.ok ? 'success' : 'error' });
+  toast(view.ok ? 'JARVIS connected' : view.line, { tone: view.ok ? 'success' : 'error' });
 });
 
 $('#btnConnectDoctor')?.addEventListener('click', () => { closeSheet('connectSheet'); settingsUi.openDoctor(); });
@@ -449,9 +489,10 @@ document.addEventListener('click', async (event) => {
 /* ============================== starters ================================= */
 const STARTER_PROMPTS = {
   ask: '',
-  build: 'Help me build: ',
-  analyze: 'Analyze this for me: ',
-  research: 'Research this topic and give me a structured summary: ',
+  build: 'Help me code: ',
+  analyze: 'Explain this in simple terms: ',
+  summarize: 'Summarize this: ',
+  research: 'Help me with this website. URL or page text: ',
   plan: 'Help me plan: ',
 };
 
@@ -459,14 +500,14 @@ for (const button of document.querySelectorAll('#starterGrid .starter')) {
   button.addEventListener('click', () => {
     const prompt = STARTER_PROMPTS[button.dataset.starter] ?? '';
     composer.setValue(prompt);
-    if (!prompt) toast('Ask TRALIX anything', { ms: 1600 });
+    if (!prompt) toast('Ask JARVIS anything', { ms: 1600 });
   });
 }
 
 /* ============================== lifecycle ================================ */
 window.addEventListener('offline', () => {
   setError('You are offline');
-  toast('You are offline — TRALIX will not be able to reply', { tone: 'error' });
+  toast('You are offline — live AI is unavailable; local Demo Mode still works', { tone: 'error' });
 });
 
 window.addEventListener('online', () => {
@@ -476,11 +517,13 @@ window.addEventListener('online', () => {
 });
 
 window.addEventListener('pagehide', () => {
+  document.documentElement.classList.add('page-suspended');
   Voice.stopSpeaking();
   forceReleaseScrollLock();
 });
 
 document.addEventListener('visibilitychange', () => {
+  document.documentElement.classList.toggle('page-suspended', document.hidden);
   if (document.hidden) {
     Voice.stopSpeaking();
     forceReleaseScrollLock();
@@ -512,6 +555,9 @@ async function init() {
 
   updateModelChip();
   updateConnText();
+  assistantUI.setViewMode(state.chat.messages?.some(message => !message.hidden) ? 'conversation' : 'immersive', { notify: false });
+  assistantUI.updateCapabilities({ input: Voice.sttSupported, output: Voice.ttsSupported, voices: Voice.voiceList().length });
+  assistantUI.updateConnection(state.health);
   sidebar.render();
   sidebar.refreshCounts();
   memoryManagerSettings.refresh();
@@ -524,7 +570,10 @@ async function init() {
   composer.resize();
 
   // iOS hands over voices only after a gesture in some versions
-  Voice.loadVoices().then(() => settingsUi.refresh?.());
+  Voice.loadVoices().then((voices) => {
+    assistantUI.updateCapabilities({ input: Voice.sttSupported, output: Voice.ttsSupported, voices: voices.length });
+    settingsUi.refresh?.();
+  });
 
   bindVisualViewport({
     app: el.app,
@@ -554,9 +603,11 @@ async function init() {
     startHealthWatch();
   }, 250);
 
-  // reveal
+  // Reveal the live app with a short, GPU-cheap cinematic transition.
+  el.app.classList.add('app-entering');
   el.boot?.remove();
   el.app.hidden = false;
+  setTimeout(() => el.app.classList.remove('app-entering'), 850);
 
   const query = window.location?.search || '';
   if (query.includes('new=1')) chat.newChat();
@@ -591,5 +642,5 @@ if ('serviceWorker' in navigator) {
 init().catch((err) => {
   console.error('[tralix] boot failed', err);
   const boot = document.getElementById('boot');
-  if (boot) boot.textContent = 'TRALIX AI could not start. Reload the page.';
+  if (boot) boot.textContent = 'JARVIS could not start. Reload the page.';
 });

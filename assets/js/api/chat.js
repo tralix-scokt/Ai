@@ -30,7 +30,7 @@ export function activeTransport(settings) {
 export function transportLabel(settings) {
   return activeTransport(settings) === 'local'
     ? `Local · ${Local.providerById(settings.advanced.localProvider).label}`
-    : 'TRALIX backend';
+    : 'Secure JARVIS backend';
 }
 
 /** Build the message array sent to the model (trimmed history, roles normalised). */

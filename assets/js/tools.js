@@ -30,7 +30,7 @@ export const TOOLS = [
     description: 'Look up current information — news, prices, scores, weather.',
     available: FEATURES.webSearch,
     run_where: 'server',
-    unavailableReason: 'Web search is not enabled on the connected TRALIX backend.',
+    unavailableReason: 'Web search is not enabled on the connected JARVIS backend.',
   },
   {
     id: 'calculator',
@@ -73,7 +73,7 @@ export const TOOLS = [
     description: 'Read PDF, DOCX, TXT, images and code files.',
     available: FEATURES.attachments,
     run_where: 'server',
-    unavailableReason: 'File parsing needs the TRALIX upload pipeline (not deployed yet).',
+    unavailableReason: 'File parsing needs an upload pipeline (not deployed yet).',
   },
   {
     id: 'image_understanding',
@@ -112,7 +112,7 @@ export function applyServerTools(ids = []) {
     if (tool.run_where !== 'server') continue;
     tool.available = set.has(tool.id);
     if (!tool.available && !tool.unavailableReason) {
-      tool.unavailableReason = 'Not enabled on the connected TRALIX backend.';
+      tool.unavailableReason = 'Not enabled on the connected JARVIS backend.';
     }
   }
 }

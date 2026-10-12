@@ -23,14 +23,14 @@ export const ERROR_CODES = {
 
 const MESSAGES = {
   [ERROR_CODES.offline]: 'You appear to be offline. Reconnect and try again.',
-  [ERROR_CODES.network]: 'Unable to connect to TRALIX. Check your connection and try again.',
+  [ERROR_CODES.network]: 'Unable to reach the JARVIS backend. Check your connection and try again.',
   [ERROR_CODES.timeout]: 'Request timed out. The answer may be long — try again or shorten the request.',
   [ERROR_CODES.rate_limit]: 'Rate limit reached. Give it a few seconds before sending again.',
-  [ERROR_CODES.unauthorized]: 'TRALIX is not authorised to use the AI service. Check the server key.',
-  [ERROR_CODES.invalid_config]: 'Invalid configuration. The TRALIX backend is missing or misconfigured.',
+  [ERROR_CODES.unauthorized]: 'The AI service rejected the backend credentials. Check the server configuration.',
+  [ERROR_CODES.invalid_config]: 'The backend is missing or misconfigured. Check its setup.',
   [ERROR_CODES.provider_unavailable]: 'The AI service is unavailable right now. Try again shortly.',
   [ERROR_CODES.bad_request]: 'That request could not be processed. Try rephrasing it.',
-  [ERROR_CODES.too_long]: 'That message is too long for TRALIX. Trim it and try again.',
+  [ERROR_CODES.too_long]: 'That message is too long. Trim it and try again.',
   [ERROR_CODES.aborted]: 'Stopped.',
   [ERROR_CODES.unsupported]: 'That feature is not available yet.',
   [ERROR_CODES.unknown]: 'Something went wrong. Please try again.',

@@ -16,6 +16,7 @@ import { needsLiveInfo } from '../tools.js';
 import * as Store from '../store.js';
 import * as Voice from '../voice.js';
 import * as Api from '../api/chat.js';
+import { streamDemoReply } from '../demo.js';
 import { isNearBottom, scrollToEnd } from '../scrolling.js';
 import { messageNode, updateMessageBody, dayDivider, closeAllMoreMenus } from './messages.js';
 import { toast } from './feedback.js';
@@ -55,8 +56,9 @@ export function createChatController(deps) {
 
     closeAllMoreMenus();
     messagesEl.innerHTML = '';
-    messagesEl.hidden = messages.length === 0;
-    welcomeEl.hidden = messages.length > 0;
+    const immersive = $('#app')?.dataset.mode === 'immersive';
+    messagesEl.hidden = messages.length === 0 || immersive;
+    welcomeEl.hidden = messages.length > 0 && !immersive;
 
     let bucket = null;
     messages.forEach((msg, index) => {
@@ -69,8 +71,22 @@ export function createChatController(deps) {
       messagesEl.appendChild(messageNode(msg, contextFor(msg, index, messages)));
     });
 
-    if (!messages.length) renderWelcome();
+    if (!welcomeEl.hidden) renderWelcome();
+    renderSessionPreview(messages);
     syncJumpButton();
+  }
+
+  function renderSessionPreview(messages = []) {
+    const preview = $('#sessionPreview');
+    if (!preview) return;
+    const visible = messages.filter(message => !message.hidden);
+    preview.hidden = visible.length === 0;
+    if (!visible.length) return;
+
+    const latest = [...visible].reverse().find(message => !message.pending) || visible.at(-1);
+    const excerpt = stripMarkdown(latest?.text || '').replace(/\s+/g, ' ').trim();
+    $('#sessionMessageCount').textContent = `${visible.length} ${visible.length === 1 ? 'message' : 'messages'} · saved on this device`;
+    $('#sessionLatest').textContent = excerpt.length > 96 ? `${excerpt.slice(0, 93)}…` : (excerpt || 'Your recent exchange is standing by.');
   }
 
   function contextFor(msg, index, messages) {
@@ -81,7 +97,7 @@ export function createChatController(deps) {
       isLast,
       speakingId,
       ttsSupported: Voice.ttsSupported,
-      modelLabel: modelLabel(getSettings().model),
+      modelLabel: msg.demo ? 'Local example' : modelLabel(getSettings().model),
       onAction: handleAction,
     };
   }
@@ -98,10 +114,15 @@ export function createChatController(deps) {
 
   function renderWelcome() {
     const settings = getSettings();
-    $('#welcomeQuestion').textContent = 'What can I help you accomplish?';
+    $('#welcomeQuestion').textContent = 'Systems online. How can I assist you?';
     const note = $('#welcomeNote');
     const text = $('#welcomeNoteText');
     const btn = $('#welcomeNoteBtn');
+
+    if (deps.isDemoMode?.()) {
+      note.hidden = true;
+      return;
+    }
 
     if (settings.advanced.transport === 'local') {
       note.hidden = false;
@@ -112,7 +133,7 @@ export function createChatController(deps) {
       const health = deps.getHealth?.();
       if (health && !health.ok) {
         note.hidden = false;
-        text.textContent = health.message || 'The TRALIX backend is not reachable.';
+        text.textContent = health.message || 'The JARVIS backend is not reachable.';
         btn.textContent = 'Set up';
         btn.onclick = () => deps.onOpenConnect?.();
       } else {
@@ -123,7 +144,9 @@ export function createChatController(deps) {
 
   /* -------------------------------- scrolling ----------------------------- */
   function syncJumpButton() {
-    jumpBtn.hidden = isNearBottom(scrollEl, 140) || !(getChat()?.messages?.length);
+    jumpBtn.hidden = $('#app')?.dataset.mode === 'immersive'
+      || isNearBottom(scrollEl, 140)
+      || !(getChat()?.messages?.length);
   }
 
   function pinToBottom(instant = false) {
@@ -139,6 +162,7 @@ export function createChatController(deps) {
     stopStreaming({ silent: true });
     const chat = Store.newChat({ projectId: null });
     setChat(chat);
+    deps.onViewModeChange?.('immersive');
     render();
     if (focus) composer.focus();
     onChatsChanged();
@@ -150,6 +174,7 @@ export function createChatController(deps) {
     if (!chat) return;
     stopStreaming({ silent: true });
     setChat(chat);
+    deps.onViewModeChange?.(chat.messages?.some(message => !message.hidden) ? 'conversation' : 'immersive');
     render();
     pinToBottom(true);
     onChatsChanged();
@@ -172,6 +197,7 @@ export function createChatController(deps) {
     if (!chat.messages.length) chat.title = Store.titleFrom(trimmed);
 
     chat.messages.push({ id: uid(), role: 'user', text: trimmed, ts: Date.now() });
+    deps.onViewModeChange?.('conversation');
     composer.clear();
     persist();
     render();
@@ -207,7 +233,11 @@ export function createChatController(deps) {
     const chat = getChat();
     if (!chat) return;
 
-    const botMsg = { id: uid(), role: 'assistant', text: '', ts: Date.now(), pending: true, model: settings.model };
+    const demoMode = deps.isDemoMode?.() === true;
+    const botMsg = {
+      id: uid(), role: 'assistant', text: '', ts: Date.now(), pending: true,
+      model: demoMode ? 'Local demo' : settings.model, demo: demoMode,
+    };
     chat.messages.push(botMsg);
     streaming = true;
     composer.setStreaming(true);
@@ -228,6 +258,7 @@ export function createChatController(deps) {
 
     const onDelta = (_delta, whole) => {
       full = whole;
+      botMsg.text = full;
       if (streaming) setStatus('generating');
       if (!pendingPaint) pendingPaint = requestAnimationFrame(paint);
     };
@@ -238,15 +269,21 @@ export function createChatController(deps) {
     let failure = null;
     let result = null;                  // declared outside: the outcome is read after the catch
     try {
-      result = await Api.send({
-        settings,
-        messages,
-        instructions,
-        signal: controller.signal,
-        onDelta,
-      });
+      if (demoMode) {
+        const lastUser = [...(chat.messages || [])].reverse().find(message => message.role === 'user' && !message.hidden);
+        result = await streamDemoReply({ input: lastUser?.text || '', signal: controller.signal, onDelta });
+      } else {
+        result = await Api.send({
+          settings,
+          messages,
+          instructions,
+          signal: controller.signal,
+          onDelta,
+        });
+      }
       full = result?.text ?? full;
-      if (result?.model) botMsg.model = result.model;
+      botMsg.demo = Boolean(result?.demo || demoMode);
+      if (result?.model && !botMsg.demo) botMsg.model = result.model;
     } catch (err) {
       if (err?.name === 'AbortError' || err?.code === ERROR_CODES.aborted) {
         failure = null;                                  // deliberate stop
@@ -445,7 +482,7 @@ export function createChatController(deps) {
     if (!summary) return;
     const saved = Store.addMemory(summary, { source: 'saved-response' });
     if (saved?.refused) {
-      toast('That looks sensitive, so TRALIX did not store it.', { tone: 'error' });
+      toast('That looks sensitive, so JARVIS did not store it.', { tone: 'error' });
       return;
     }
     if (!saved) {

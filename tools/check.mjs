@@ -3,7 +3,7 @@
    tools/check.mjs — static validation ("build" step for a buildless app).
 
      1. syntax-check every JavaScript module                  (node --check)
-     2. validate manifest.webmanifest and JSON files
+     2. validate the manifest, package, Render config, and JSON files
      3. verify every asset referenced by index.html exists
      4. verify the service-worker shell list matches real files
      5. scan for leaked API keys and forbidden vendor calls
@@ -58,7 +58,7 @@ for (const file of jsFiles) {
 
 /* 2 ─ JSON ----------------------------------------------------------------- */
 console.log('\n— json —');
-for (const file of ['manifest.webmanifest', 'package.json']) {
+for (const file of ['manifest.webmanifest', 'package.json', 'render.json']) {
   const full = path.join(root, file);
   if (!(await exists(full))) { bad(file, 'missing'); continue; }
   try {
@@ -67,6 +67,33 @@ for (const file of ['manifest.webmanifest', 'package.json']) {
   } catch (err) {
     bad(file, err.message);
   }
+}
+
+const renderConfig = JSON.parse(await readFile(path.join(root, 'render.json'), 'utf8'));
+if (renderConfig.startCommand === 'node server/node.js --static') {
+  ok('render.json starts the combined frontend and API server');
+} else {
+  bad('render.json start command', 'must serve the frontend and API together with --static');
+}
+const keyEnv = renderConfig.env?.OPENAI_API_KEY;
+if (keyEnv?.sync === false && !Object.hasOwn(keyEnv, 'value')) {
+  ok('render.json never stores the optional provider key');
+} else {
+  bad('render.json provider key', 'keep OPENAI_API_KEY as a dashboard-only secret');
+}
+
+const renderBlueprint = await readFile(path.join(root, 'render.yaml'), 'utf8');
+if (/^\s*-\s*key:\s*OPENAI_API_KEY\s*$/m.test(renderBlueprint)) {
+  bad('render.yaml provider key', 'add OPENAI_API_KEY only as a Render dashboard secret');
+} else {
+  ok('Render Blueprint does not configure a provider key');
+}
+if (/type:\s*web/.test(renderBlueprint)
+  && /startCommand:\s*npm run serve/.test(renderBlueprint)
+  && /healthCheckPath:\s*\/api\/health/.test(renderBlueprint)) {
+  ok('Render Blueprint serves the frontend and API on one origin');
+} else {
+  bad('render.yaml', 'expected a Node web service using npm run serve and /api/health');
 }
 
 /* 3 ─ referenced assets ---------------------------------------------------- */
@@ -113,7 +140,7 @@ const SECRET_PATTERNS = [
 ];
 
 const scannable = allFiles.filter(f =>
-  /\.(m?js|html|css|json|webmanifest|md|txt|yml|toml|example)$/.test(f)
+  /\.(m?js|html|css|json|webmanifest|md|txt|ya?ml|toml|example)$/.test(f)
   && !f.includes('node_modules')
 );
 

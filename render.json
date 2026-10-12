@@ -1,18 +1,21 @@
 {
   "name": "tralix-backend",
-  "description": "TRALIX backend — holds the OpenAI key, serves /api/chat",
+  "description": "JARVIS frontend and same-origin API on the existing Render service",
   "repository": "https://github.com/tralix-scokt/Ai",
   "rootDirectory": ".",
-  "startCommand": "node server/node.js",
-  "healthCheckPath": "/api/health?probe=1",
+  "startCommand": "node server/node.js --static",
+  "healthCheckPath": "/api/health",
   "env": {
-    "NODE_VERSION": { "value": "20", "sync": false },
+    "NODE_VERSION": {
+      "value": "20",
+      "sync": false
+    },
     "OPENAI_API_KEY": {
-      "description": "OpenAI API key (server only, never committed)",
+      "description": "Optional OpenAI API key for live model replies (server only, never committed); omit for Demo Mode",
       "sync": false
     },
     "TRALIX_ALLOWED_ORIGINS": {
-      "value": "https://tralix-scokt.github.io",
+      "value": "https://tralix-backend.onrender.com",
       "sync": false
     },
     "TRALIX_ENABLE_WEB_SEARCH": {
@@ -21,7 +24,9 @@
     }
   },
   "domains": [
-    { "name": "" }
+    {
+      "name": ""
+    }
   ],
   "numInstances": 1,
   "plan": "starter",

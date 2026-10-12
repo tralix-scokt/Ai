@@ -62,10 +62,10 @@ function replyFor(request) {
 
   if (input.includes('TRIGGER_ECHO_MODEL')) {
     return [`model=${request.model}`, ` effort=${request.reasoning?.effort ?? 'none'}`,
-      ` instructions=${(request.instructions || '').includes('TRALIX AI') ? 'present' : 'MISSING'}`].join(' ');
+      ` instructions=${(request.instructions || '').includes('JARVIS AI') ? 'present' : 'MISSING'}`].join(' ');
   }
   if (!prompt) return 'No prompt was supplied.';
-  return `TRALIX test reply to: ${prompt.slice(0, 120)}`;
+  return `JARVIS test reply to: ${prompt.slice(0, 120)}`;
 }
 
 function chunksOf(text) {

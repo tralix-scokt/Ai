@@ -2,20 +2,21 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<title>TRALIX AI — Intelligent AI Assistant</title>
-<meta name="description" content="TRALIX AI is a personal AI assistant with memory, voice and a secure OpenAI-powered backend.">
+<title>JARVIS AI — Personal Intelligence System</title>
+<meta name="description" content="JARVIS is a personal AI assistant with on-device voice, local demo mode and an optional secure AI backend.">
 
 <!-- iPhone / PWA -->
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<meta name="theme-color" content="#0a0b0f" media="(prefers-color-scheme: dark)">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#050812" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="color-scheme" content="dark light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="TRALIX">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
 <meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="./icons/mark.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
@@ -23,7 +24,7 @@
 
 <!-- Paint the shell colour before the stylesheet arrives: avoids a white flash on iOS -->
 <style>
-  html, body { margin: 0; background: #0a0b0f; color: #e8eaf0; }
+  html, body { margin: 0; background: #050812; color: #edf7ff; }
   #boot { display: flex; align-items: center; justify-content: center; height: 100vh; height: 100dvh;
           font: 500 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
           color: #6b7280; letter-spacing: .04em; }
@@ -33,7 +34,7 @@
 <body>
 <a class="skip-link" href="#composer-input">Skip to message box</a>
 
-<div id="boot" aria-hidden="true">TRALIX AI</div>
+<div id="boot" aria-hidden="true"><span class="boot-mark">J</span><span>JARVIS<span class="boot-caption">PERSONAL INTELLIGENCE</span></span></div>
 
 <!-- ============================ APP FRAME ============================ -->
 <div class="app" id="app" hidden>
@@ -45,12 +46,12 @@
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 32 32" focusable="false">
             <circle cx="16" cy="16" r="12.5" class="ring"/>
-            <path class="tmark" d="M10 11.5h12M16 11.5V22"/>
+            <path class="jmark" d="M11 9v8.2a4.6 4.6 0 0 0 9.2 0V9M11 9h9.2"/>
           </svg>
         </span>
         <span class="brand-text">
-          <strong>TRALIX AI</strong>
-          <small>Intelligent AI Assistant</small>
+          <strong>JARVIS AI</strong>
+          <small>PERSONAL INTELLIGENCE</small>
         </span>
       </a>
       <button type="button" class="icon-btn ghost" id="btnSidebarCollapse" aria-label="Collapse sidebar" title="Collapse sidebar">
@@ -95,7 +96,7 @@
     <div class="sidebar-foot">
       <button type="button" class="nav-item" id="btnNavModel" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5l1.5 3.6 3.6 1.5-3.6 1.5L12 17.5l-1.5-3.9L6.9 12l3.6-1.5z"/><path d="M18.5 4.5v2M17.5 5.5h2M5.5 16.5v2M4.5 17.5h2"/></svg>
-        <span id="navModelLabel">TRALIX Smart</span>
+        <span id="navModelLabel">JARVIS Smart</span>
       </button>
 
       <button type="button" class="nav-item" id="btnSettings">
@@ -104,9 +105,9 @@
       </button>
 
       <div class="conn-row" id="connRow">
-        <span class="tralix-status" id="statusSidebar" data-state="idle" role="img" aria-label="TRALIX status: idle"></span>
+        <span class="tralix-status" id="statusSidebar" data-state="idle" role="img" aria-label="JARVIS status: idle"></span>
         <span class="sr-only" id="statusSidebarLabel" aria-live="polite">Idle</span>
-        <span class="conn-text" id="connText">TRALIX backend</span>
+        <span class="conn-text" id="connText">Secure AI link</span>
         <button type="button" class="icon-btn ghost tiny" id="btnConnInfo" aria-label="Connection details">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8.2v.1"/></svg>
         </button>
@@ -139,16 +140,23 @@
       <div class="topbar-center">
         <span class="topbar-brand mobile-only">
           <span class="tralix-status tiny" id="statusTopbar" data-state="idle" aria-hidden="true"></span>
-          <span class="topbar-brand-text">TRALIX AI</span>
+          <span class="topbar-brand-text">JARVIS</span>
         </span>
         <button type="button" class="model-chip desktop-only" id="btnModel" aria-haspopup="dialog" aria-label="Choose model">
           <span class="tralix-status tiny" id="statusChip" data-state="idle" aria-hidden="true"></span>
-          <span class="chip-label" id="chipLabel">TRALIX Smart</span>
+          <span class="chip-label" id="chipLabel">JARVIS Smart</span>
           <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
         </button>
       </div>
 
       <div class="topbar-actions">
+        <button type="button" class="runtime-badge" id="runtimeBadge" aria-pressed="true" title="Switch between local demo examples and the live backend">
+          <span class="runtime-light" aria-hidden="true"></span><span id="runtimeLabel">DEMO</span>
+        </button>
+        <button type="button" class="mode-toggle" id="btnViewMode" aria-label="Switch to conversation mode" title="Switch to conversation mode">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M8 9h8M8 12h5M8 15h8"/></svg>
+          <span id="viewModeLabel">CHAT</span>
+        </button>
         <button type="button" class="icon-btn" id="btnNewChatTop" aria-label="New chat">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
@@ -160,44 +168,69 @@
 
     <main class="chat" id="chatScroll" tabindex="-1">
 
-      <!-- empty state -->
-      <section class="welcome" id="welcome">
-        <div class="welcome-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" focusable="false">
-            <circle cx="16" cy="16" r="12.5" class="ring"/>
-            <path class="tmark" d="M10 11.5h12M16 11.5V22"/>
-          </svg>
+      <!-- Immersive JARVIS home / empty-conversation state -->
+      <section class="welcome assistant-stage" id="welcome" aria-labelledby="welcomeTitle">
+        <div class="stage-rail">
+          <div class="stage-wordmark"><span class="stage-wordmark-icon" aria-hidden="true">J</span><span>JARVIS <i>AI</i></span></div>
+          <button type="button" class="demo-switch" id="demoModeButton" aria-pressed="true" title="Switch between local demo examples and the live backend">
+            <span class="runtime-light" aria-hidden="true"></span><span id="demoModeLabel">DEMO MODE</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>
+          </button>
         </div>
-        <h1 class="welcome-title">TRALIX AI</h1>
-        <p class="welcome-tagline">Intelligent AI Assistant</p>
-        <p class="welcome-question" id="welcomeQuestion">What can I help you accomplish?</p>
 
-        <div class="starter-grid" id="starterGrid">
-          <button type="button" class="starter" data-starter="ask">
-            <span class="st-icon" aria-hidden="true">◇</span>
-            <span class="st-title">Ask TRALIX</span>
-            <span class="st-sub">Ask anything</span>
+        <div class="core-scene" id="aiCore" data-state="idle" role="img" aria-label="JARVIS energy core, idle">
+          <div class="core-aura" aria-hidden="true"></div>
+          <div class="core-orbit core-orbit-outer" aria-hidden="true"><i></i><b></b></div>
+          <div class="core-orbit core-orbit-tilt" aria-hidden="true"><i></i><b></b></div>
+          <div class="core-orbit core-orbit-inner" aria-hidden="true"><i></i></div>
+          <div class="core-particle particle-one" aria-hidden="true"></div>
+          <div class="core-particle particle-two" aria-hidden="true"></div>
+          <div class="core-particle particle-three" aria-hidden="true"></div>
+          <div class="core-particle particle-four" aria-hidden="true"></div>
+          <div class="core-shell" aria-hidden="true">
+            <div class="core-glass">
+              <div class="core-glint"></div>
+              <div class="core-lens"></div>
+              <div class="core-energy"></div>
+              <div class="core-nucleus"></div>
+              <div class="core-crosshair"></div>
+            </div>
+          </div>
+          <div class="core-ripple ripple-one" aria-hidden="true"></div>
+          <div class="core-ripple ripple-two" aria-hidden="true"></div>
+          <span class="core-scan-label" id="coreStateLabel">SYSTEMS NOMINAL</span>
+        </div>
+
+        <div class="stage-copy">
+          <p class="stage-eyebrow"><span class="live-dot" aria-hidden="true"></span> PERSONAL INTELLIGENCE · ONLINE</p>
+          <h1 class="welcome-title" id="welcomeTitle">JARVIS<span class="title-ai"> AI</span></h1>
+          <p class="welcome-tagline">A quieter kind of intelligence.</p>
+          <p class="welcome-question" id="welcomeQuestion">Systems online. How can I assist you?</p>
+        </div>
+
+        <div class="session-preview" id="sessionPreview" hidden>
+          <div class="session-orb" aria-hidden="true"><span></span></div>
+          <div class="session-preview-copy"><strong id="sessionMessageCount">Conversation ready</strong><span id="sessionLatest">Your recent exchange is standing by.</span></div>
+          <button type="button" class="session-open" id="btnResumeConversation" aria-label="Open conversation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </button>
-          <button type="button" class="starter" data-starter="build">
-            <span class="st-icon" aria-hidden="true">⌘</span>
-            <span class="st-title">Build</span>
-            <span class="st-sub">Create websites, code and ideas</span>
-          </button>
-          <button type="button" class="starter" data-starter="analyze">
-            <span class="st-icon" aria-hidden="true">◫</span>
-            <span class="st-title">Analyze</span>
-            <span class="st-sub">Analyze text, code or files</span>
-          </button>
-          <button type="button" class="starter" data-starter="research">
-            <span class="st-icon" aria-hidden="true">◉</span>
-            <span class="st-title">Research</span>
-            <span class="st-sub">Explore a topic</span>
-          </button>
-          <button type="button" class="starter" data-starter="plan">
-            <span class="st-icon" aria-hidden="true">☰</span>
-            <span class="st-title">Plan</span>
-            <span class="st-sub">Organize a project or task</span>
-          </button>
+        </div>
+
+        <div class="system-readout" role="group" aria-label="Assistant system status">
+          <div class="readout-cell"><span class="readout-label">INPUT</span><span class="readout-value" id="micStatusLabel">Checking browser…</span></div>
+          <div class="readout-divider" aria-hidden="true"></div>
+          <div class="readout-cell"><span class="readout-label">VOICE</span><span class="readout-value" id="voiceStatusLabel">Checking system voices…</span></div>
+          <div class="readout-divider" aria-hidden="true"></div>
+          <div class="readout-cell"><span class="readout-label">LINK</span><span class="readout-value" id="connectionStatusLabel">Local demo</span></div>
+        </div>
+
+        <div class="starter-area">
+          <div class="starter-heading"><span>QUICK START</span><span>SELECT A TASK</span></div>
+          <div class="starter-grid" id="starterGrid">
+            <button type="button" class="starter" data-starter="analyze"><span class="st-icon" aria-hidden="true">◈</span><span class="st-title">Explain this</span><span class="st-sub">Make a complex idea clear</span></button>
+            <button type="button" class="starter" data-starter="build"><span class="st-icon" aria-hidden="true">⌘</span><span class="st-title">Help me code</span><span class="st-sub">Work through a coding task</span></button>
+            <button type="button" class="starter" data-starter="summarize"><span class="st-icon" aria-hidden="true">≋</span><span class="st-title">Summarize this</span><span class="st-sub">Find the signal in the detail</span></button>
+            <button type="button" class="starter" data-starter="research"><span class="st-icon" aria-hidden="true">↗</span><span class="st-title">Open a website</span><span class="st-sub">Get help with a link or page</span></button>
+          </div>
         </div>
 
         <div class="welcome-note" id="welcomeNote" hidden>
@@ -205,6 +238,7 @@
           <span id="welcomeNoteText"></span>
           <button type="button" class="link-btn" id="welcomeNoteBtn">Set up</button>
         </div>
+        <p class="demo-footnote" id="demoFootnote">DEMO MODE · Local example responses. No AI model is connected.</p>
       </section>
 
       <!-- messages -->
@@ -221,18 +255,21 @@
       <div class="voice-state" id="voiceState" hidden aria-live="polite">
         <span class="tralix-status" id="statusVoice" data-state="listening" aria-hidden="true"></span>
         <span class="voice-label" id="voiceLabel">Listening…</span>
-        <span class="voice-hint" id="voiceHint">tap the mic again to stop</span>
+        <span class="voice-hint" id="voiceHint">tap Stop to finish dictation</span>
+        <button type="button" class="voice-stop" id="btnStopListening" aria-label="Stop listening">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg><span>Stop</span>
+        </button>
       </div>
 
       <form class="composer" id="composer" autocomplete="off">
-        <label class="sr-only" for="composer-input">Message TRALIX</label>
+        <label class="sr-only" for="composer-input">Message JARVIS</label>
 
         <button type="button" class="icon-btn composer-btn" id="btnAttach" aria-label="Add attachment">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
 
         <textarea id="composer-input" name="message" rows="1"
-                  placeholder="Message TRALIX…"
+                  placeholder="Message JARVIS…"
                   enterkeyhint="send"
                   autocapitalize="sentences"
                   autocorrect="on"
@@ -247,6 +284,9 @@
             </svg>
           </button>
 
+          <button type="button" class="icon-btn composer-btn stop-speech" id="btnStopSpeaking" hidden aria-label="Stop speaking" title="Stop speaking">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15 9l6 6M21 9l-6 6"/></svg>
+          </button>
           <button type="submit" class="icon-btn composer-btn send" id="btnSend" aria-label="Send message" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
           </button>
@@ -257,7 +297,7 @@
         </div>
       </form>
 
-      <p class="composer-foot" id="composer-foot">TRALIX can make mistakes. Verify important information.</p>
+      <p class="composer-foot" id="composer-foot">JARVIS can make mistakes. Verify important information.</p>
     </div>
   </div>
 </div>
@@ -337,7 +377,7 @@
             <option value="pt">Português</option>
             <option value="ar">العربية</option>
           </select>
-          <p class="hint">Controls how TRALIX replies and how dates are shown.</p>
+          <p class="hint">Controls how JARVIS replies and how dates are shown.</p>
         </div>
         <label class="toggle-row">
           <span><strong>Haptics</strong><small>Subtle vibration feedback on send and errors</small></span>
@@ -367,7 +407,7 @@
           <label for="personaInput">Custom instructions</label>
           <textarea id="personaInput" class="set-textarea" rows="4"
             placeholder="e.g. Call me Tralix. Be direct, skip pleasantries, explain trade-offs."></textarea>
-          <p class="hint">Used when personality is set to Custom. TRALIX's safety and honesty rules always apply.</p>
+          <p class="hint">Used when personality is set to Custom. JARVIS's safety and honesty rules always apply.</p>
         </div>
       </section>
 
@@ -375,7 +415,7 @@
       <section class="set-block" data-section="voice" hidden>
         <h3 class="set-h">Voice</h3>
         <label class="toggle-row">
-          <span><strong>Voice output</strong><small>Allow TRALIX to speak replies</small></span>
+          <span><strong>Voice output</strong><small>Allow JARVIS to speak replies</small></span>
           <input type="checkbox" id="setVoiceEnabled" class="switch" role="switch">
         </label>
         <label class="toggle-row">
@@ -404,7 +444,7 @@
       <section class="set-block" data-section="memory" hidden>
         <h3 class="set-h">Memory</h3>
         <label class="toggle-row">
-          <span><strong>Enable memory</strong><small>TRALIX can use saved facts in every chat</small></span>
+          <span><strong>Enable memory</strong><small>JARVIS can use saved facts in every chat</small></span>
           <input type="checkbox" id="setMemoryEnabled" class="switch" role="switch">
         </label>
         <label class="toggle-row">
@@ -419,7 +459,7 @@
       <!-- DATA -->
       <section class="set-block" data-section="data" hidden>
         <h3 class="set-h">Your data</h3>
-        <p class="set-p">Conversations, memories and settings live in this browser. Nothing is uploaded to TRALIX servers except the messages you send to generate a reply.</p>
+        <p class="set-p">Conversations, memories and settings live in this browser. Nothing is uploaded to JARVIS servers except the messages you send to generate a reply.</p>
         <div class="btn-row">
           <button type="button" class="btn-ghost wide" id="btnExport">Export data</button>
           <button type="button" class="btn-ghost wide" id="btnImport">Import data</button>
@@ -435,7 +475,7 @@
       <!-- ADVANCED -->
       <section class="set-block" data-section="advanced" hidden>
         <h3 class="set-h">API configuration</h3>
-        <p class="set-p">By default TRALIX talks to the TRALIX backend, which holds the OpenAI key on the server. The key is never present in this app.</p>
+        <p class="set-p">By default JARVIS talks to the secure JARVIS backend, which holds the OpenAI key on the server. The key is never present in this app.</p>
 
         <div class="field">
           <label for="advBase">Backend URL</label>
@@ -453,7 +493,7 @@
         <div class="field">
           <label for="advTransport">Where requests go</label>
           <select id="advTransport">
-            <option value="backend">TRALIX backend (recommended)</option>
+            <option value="backend">secure JARVIS backend (recommended)</option>
             <option value="local">This device only — my own provider key</option>
           </select>
           <p class="hint" id="advTransportHint"></p>
@@ -514,7 +554,7 @@
       </button>
     </div>
     <div class="sheet-body">
-      <p class="set-p">What TRALIX remembers about you. Say “remember that…” in a chat, or add it here.</p>
+      <p class="set-p">What JARVIS remembers about you. Say “remember that…” in a chat, or add it here.</p>
       <div class="mem-manager" id="memManagerSheet"></div>
     </div>
   </div>
@@ -570,7 +610,7 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="connectTitle">
     <div class="sheet-grip" aria-hidden="true"></div>
     <div class="sheet-head">
-      <h2 class="sheet-title" id="connectTitle">TRALIX backend</h2>
+      <h2 class="sheet-title" id="connectTitle">secure JARVIS backend</h2>
       <button type="button" class="icon-btn ghost" data-close="connectSheet" aria-label="Close">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
@@ -593,7 +633,7 @@
         <ol class="set-steps">
           <li>Push this repository to GitHub. The workflow in <code>.github/workflows/deploy-backend.yml</code> deploys <code>server/</code> for you.</li>
           <li>Add three repository secrets: <code>CLOUDFLARE_API_TOKEN</code>, <code>CLOUDFLARE_ACCOUNT_ID</code> and <code>OPENAI_API_KEY</code>.</li>
-          <li>Run the <strong>Deploy TRALIX backend</strong> workflow. It prints the worker URL.</li>
+          <li>Run the <strong>Deploy secure JARVIS backend</strong> workflow. It prints the worker URL.</li>
           <li>Put that URL in <code>backend.json</code> (<code>{"url": "https://…"}</code>) and push — or paste it above to use it on this device only.</li>
         </ol>
         <p class="hint">Prefer your own server? <code>OPENAI_API_KEY=… node server/node.js --static</code> serves the app and the API together. The key stays on the server either way — this frontend never receives it.</p>
@@ -667,12 +707,12 @@
 </div>
 
 <div class="update-bar" id="updateBar" hidden>
-  A new version of TRALIX is ready
+  A new version of JARVIS is ready
   <button type="button" id="btnReload">Reload</button>
 </div>
 
 <noscript>
-  <div class="noscript">TRALIX AI needs JavaScript to run. Please enable it and reload.</div>
+  <div class="noscript">JARVIS AI needs JavaScript to run. Please enable it and reload.</div>
 </noscript>
 
 <script type="module" src="./assets/js/app.js"></script>

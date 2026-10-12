@@ -1,0 +1,19 @@
+# Render Blueprint: single-origin JARVIS PWA + API.
+# OPENAI_API_KEY is deliberately omitted so Demo Mode can deploy without a model.
+# Add OPENAI_API_KEY as a secret in the Render dashboard to enable live replies.
+services:
+  - type: web
+    name: jarvis-ai
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: npm run check
+    startCommand: npm run serve
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: TRALIX_ALLOWED_ORIGINS
+        value: https://jarvis-ai.onrender.com
+      - key: TRALIX_ENABLE_WEB_SEARCH
+        value: "false"

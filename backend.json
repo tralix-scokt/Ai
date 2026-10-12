@@ -1,5 +1,5 @@
 {
-  "$comment": "Public deployment pointer for the TRALIX frontend. GitHub Pages cannot host the backend, so the deployed app reads its API base URL from this file. This file is NOT a secret: it contains a URL only. Never put an API key here. Leave url empty to use the same origin (when server/node.js --static serves both).",
+  "$comment": "Leave url empty for the Render app+API service so the frontend uses this same origin. Set a backend origin only when hosting the API separately; never put secrets here.",
   "url": "",
   "docs": "server/README.md"
 }

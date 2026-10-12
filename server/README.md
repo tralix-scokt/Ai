@@ -1,15 +1,16 @@
-# TRALIX backend
+# JARVIS backend
 
-The API layer that holds the OpenAI key. The frontend never talks to OpenAI —
-it talks to this. One handler, two deployment targets, identical behaviour.
+The API layer that holds the OpenAI key. The recommended Render deployment
+serves the frontend and API from one origin; the frontend never talks to OpenAI
+on the server-backed path. The same handler can also be deployed separately.
 
 ```
-TRALIX frontend (GitHub Pages, static)
+JARVIS frontend (Render, or another static host)
    │  POST /api/chat   → SSE stream
    │  GET  /api/health → verified connection report
-   │  GET  /api/models → TRALIX tier → OpenAI model mapping
+   │  GET  /api/models → JARVIS tier → OpenAI model mapping
    ▼
-TRALIX backend  ← OPENAI_API_KEY lives here and nowhere else
+JARVIS backend  ← OPENAI_API_KEY lives here and nowhere else
    │  POST {OPENAI_BASE_URL}/responses  (Responses API, streamed)
    ▼
 OpenAI
@@ -24,14 +25,16 @@ OpenAI
 
 ---
 
-## 1. Run it locally (5 minutes, no account needed)
+## 1. Run it locally (no account needed)
 
 ```bash
-OPENAI_API_KEY=sk-… node server/node.js --static
-# → http://localhost:8787   (app + API on the same origin)
+npm run serve
+# → http://localhost:8787   (JARVIS app + API on the same origin)
 ```
 
-Check it:
+No key is needed for the app or local demo. To enable real model replies, set
+`OPENAI_API_KEY` in the server environment before starting it (never in frontend
+code). Check the API:
 
 ```bash
 curl -s "http://localhost:8787/api/health?probe=1" | head -c 400
@@ -39,11 +42,12 @@ curl -s  http://localhost:8787/api/models
 ```
 
 `"ok": true` and `"verified": true` mean the backend reached OpenAI and the key
-was accepted. That is a real upstream round-trip, not a guess.
+was accepted. Without a key, an `unconfigured` health status is expected; the
+local demo remains available.
 
 ## 2. Deploy it separately (Cloudflare Workers)
 
-The frontend stays on GitHub Pages. Only this API moves.
+This is an alternative when you want the API separate from the Render app. The frontend can stay on a static host (including GitHub Pages) and must use the worker URL as its API base.
 
 ### Option A — GitHub Actions (recommended, nothing to install)
 
@@ -57,7 +61,7 @@ The frontend stays on GitHub Pages. Only this API moves.
    | `OPENAI_API_KEY` | platform.openai.com → API keys |
 
 2. Optionally add **Variables** (not secrets): `TRALIX_ALLOWED_ORIGINS`
-   (default `https://tralix-scokt.github.io`), `TRALIX_MODEL_SMART`, and so on.
+   (default `https://jarvis-ai.onrender.com`), `TRALIX_MODEL_SMART`, and so on. If your Render URL differs, set the allowed origin to the actual app URL.
 
 3. Run **Actions → Deploy TRALIX backend → Run workflow**. It prints the worker
    URL and a health link. The key is pushed from the runner to Cloudflare as an
@@ -76,49 +80,62 @@ or by hand:
 ```bash
 cd server
 npx wrangler deploy worker.js --name tralix-backend \
-  --var TRALIX_ALLOWED_ORIGINS:https://tralix-scokt.github.io
+  --var TRALIX_ALLOWED_ORIGINS:https://jarvis-ai.onrender.com
 npx wrangler secret put OPENAI_API_KEY
 ```
 
-### Option C — Render (one-click)
+### Option C — Render (frontend + API on one origin)
 
-1. In Render: **New → Web Service**, pick this repo.
-2. **Build Command:** leave blank (no build step needed).
-   **Start Command:** `node server/node.js`
-3. **Environment Variables:**
-   - `OPENAI_API_KEY` = your key
-   - `TRALIX_ALLOWED_ORIGINS` = `https://tralix-scokt.github.io` (or your custom domain)
-4. Wait for the build. Render prints a URL like `https://tralix-backend-xxxx.onrender.com`.
-5. Check: `curl -s "https://tralix-backend-xxxx.onrender.com/api/health?probe=1"` → `"ok":true,"verified":true`.
+The repository has a Render Blueprint at `render.yaml`. It runs one Node Web
+Service with the JARVIS static app and `/api` together:
 
-Notes for Render:
-- The free tier **spins down after 15 min idle**; the first request after that takes
-  ~30s, which the frontend will show as "checking…" and then recover. Use at least
-  the **Starter** plan for production.
-- Set the **Health Check Path** to `/api/health?probe=1`.
-- The service only runs the backend; the frontend stays on GitHub Pages. That is
-  intentional — it is the architecture the brief requires (secret on the server).
-  Do not run with `--static` on Render, GitHub Pages already serves the UI.
+- **Build Command:** `npm run check`
+- **Start Command:** `npm run serve` (equivalent to `node server/node.js --static`)
+- **Health Check Path:** `/api/health`
+
+For a new service, use **New → Blueprint** in Render and connect this repository
+and the branch you want to deploy. The blueprint currently names the service
+`jarvis-ai` and selects the `starter` plan; review the plan before creation.
+
+If you already have a Render backend service, update it instead of creating a
+duplicate: keep its assigned name, but use the build/start/health settings above.
+This adds the frontend without changing the API routes. The repository's
+`render.json` also records the combined start mode for the existing Render setup.
+
+The API key is optional for a demo deployment. With no key, `/api/health`
+reports `unconfigured`, and JARVIS can still use its explicit local demo. To
+enable live replies, add `OPENAI_API_KEY` as a **secret** in Render's service
+environment and redeploy. Never put the key in `render.yaml`, `backend.json`, or
+frontend code.
+
+`backend.json` should keep an empty `url` when app and API share the service. The
+blueprint's `TRALIX_ALLOWED_ORIGINS` value is `https://jarvis-ai.onrender.com`;
+if Render assigns a different hostname or you use a custom domain, update that
+environment variable to the exact public app origin. Same-origin frontend/API
+requests do not need a CORS exception.
 
 ### Option D — Railway / Fly / any Node 18+ host
 
-Start command: `node server/node.js`, set the same two env vars. The repo has a
-`railway.json` for convenience.
+Start command: `node server/node.js`. Add `OPENAI_API_KEY` only for live model
+replies, and set the CORS origin if the frontend is hosted separately. The repo
+has a `railway.json` for convenience.
 
 ### Option E — a VPS you control
 
 ```bash
-OPENAI_API_KEY=… TRALIX_ALLOWED_ORIGINS=https://tralix-scokt.github.io \
+OPENAI_API_KEY=… TRALIX_ALLOWED_ORIGINS=https://your-frontend.example.com \
   node server/node.js
 ```
 
-Bind behind nginx/Caddy with HTTPS; keep port 8787 internal. Use `--static` only
-if you want the same host to serve the app too (not required).
+Bind behind nginx/Caddy with HTTPS; keep port 8787 internal. Use `--static` if
+you want the same host to serve the app and API together.
 
 ## 3. Point the frontend at it
 
-The GitHub Pages frontend is static, so it needs to be told where the API is.
-Edit **`backend.json` in the repository root** and commit it:
+When the frontend and API share the Render service, leave `backend.json`'s `url`
+empty: the app uses the same origin. If hosting the API separately (for example,
+with Cloudflare or a static frontend host), set the public API origin in
+**`backend.json` in the repository root**:
 
 ```json
 { "url": "https://tralix-backend.<your-subdomain>.workers.dev" }
@@ -142,7 +159,7 @@ one is in use.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `OPENAI_API_KEY` | **yes** | — | Upstream auth. Server-side only. |
+| `OPENAI_API_KEY` | only for live model replies | — | Upstream auth. Server-side only; omit for local demo mode. |
 | `TRALIX_ALLOWED_ORIGINS` | recommended | `*` | Comma-separated origin allow-list for CORS. |
 | `TRALIX_MODEL_FAST` | no | `gpt-5-mini` | Model behind `tralix-fast`. |
 | `TRALIX_MODEL_SMART` | no | `gpt-5` | Model behind `tralix-smart` (default tier). |

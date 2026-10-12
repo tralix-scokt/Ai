@@ -1,19 +1,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6e7bff"/>
-      <stop offset="0.55" stop-color="#8f7cff"/>
-      <stop offset="1" stop-color="#a06bff"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#6e7bff" stop-opacity="0.38"/>
-      <stop offset="0.7" stop-color="#6e7bff" stop-opacity="0.08"/>
-      <stop offset="1" stop-color="#6e7bff" stop-opacity="0"/>
+    <radialGradient id="background" cx="48%" cy="44%" r="74%">
+      <stop offset="0" stop-color="#0d1b2b"/>
+      <stop offset="0.7" stop-color="#070d18"/>
+      <stop offset="1" stop-color="#040711"/>
     </radialGradient>
+    <radialGradient id="atmosphere" cx="50%" cy="48%" r="50%">
+      <stop offset="0" stop-color="#38c9f7" stop-opacity=".3"/>
+      <stop offset=".52" stop-color="#3659db" stop-opacity=".09"/>
+      <stop offset="1" stop-color="#151c50" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="core" cx="38%" cy="33%" r="68%">
+      <stop offset="0" stop-color="#f4ffff"/>
+      <stop offset=".11" stop-color="#bafaff"/>
+      <stop offset=".32" stop-color="#55e0fa"/>
+      <stop offset=".7" stop-color="#267abf"/>
+      <stop offset="1" stop-color="#2b2869"/>
+    </radialGradient>
+    <linearGradient id="orbit-cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#87f4ff"/>
+      <stop offset=".55" stop-color="#49cdec"/>
+      <stop offset="1" stop-color="#8d78ff"/>
+    </linearGradient>
+    <linearGradient id="letter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4ffff"/>
+      <stop offset=".58" stop-color="#82edff"/>
+      <stop offset="1" stop-color="#66baf4"/>
+    </linearGradient>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="11" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="116" fill="#0a0b0f"/>
-  <circle cx="256" cy="256" r="168" fill="url(#glow)"/>
-  <circle cx="256" cy="256" r="134" fill="none" stroke="url(#ring)" stroke-width="26"/>
-  <path d="M184 188 H328" stroke="#4fd8e8" stroke-width="30" stroke-linecap="round"/>
-  <path d="M256 188 V350" stroke="#4fd8e8" stroke-width="30" stroke-linecap="round"/>
+  <rect width="512" height="512" rx="118" fill="url(#background)"/>
+  <circle cx="256" cy="256" r="205" fill="url(#atmosphere)"/>
+  <g fill="none" stroke-linecap="round">
+    <ellipse cx="256" cy="256" rx="177" ry="77" transform="rotate(-32 256 256)" stroke="url(#orbit-cyan)" stroke-width="3" opacity=".72"/>
+    <ellipse cx="256" cy="256" rx="166" ry="63" transform="rotate(48 256 256)" stroke="#9a84ff" stroke-width="2" opacity=".58"/>
+    <circle cx="256" cy="256" r="133" stroke="#b4f6ff" stroke-width="2" opacity=".42"/>
+  </g>
+  <circle cx="256" cy="256" r="111" fill="#071324" fill-opacity=".74" stroke="#a9edff" stroke-opacity=".7" stroke-width="3"/>
+  <circle cx="256" cy="256" r="97" fill="url(#core)" fill-opacity=".55" stroke="#8beaff" stroke-opacity=".48" stroke-width="2"/>
+  <circle cx="256" cy="256" r="72" fill="none" stroke="#c4f9ff" stroke-opacity=".35" stroke-width="2"/>
+  <path d="M204 207h114M293 207v94c0 29-17 48-46 48-23 0-39-12-47-31" fill="none" stroke="#30a8d2" stroke-opacity=".42" stroke-width="43" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <path d="M204 207h114M293 207v94c0 29-17 48-46 48-23 0-39-12-47-31" fill="none" stroke="url(#letter)" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="256" cy="256" r="10" fill="#f3ffff" filter="url(#glow)"/>
+  <circle cx="128" cy="181" r="5" fill="#adf5ff"/>
+  <circle cx="383" cy="318" r="4" fill="#c5aaff"/>
 </svg>

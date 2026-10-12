@@ -1,7 +1,7 @@
 /* ==========================================================================
-   sw.js — TRALIX AI service worker.
+   sw.js — JARVIS AI service worker.
 
-   Cache-first for the app shell (so TRALIX opens instantly and shows its UI
+   Cache-first for the app shell (so JARVIS opens instantly and shows its UI
    offline), revalidating quietly in the background. API calls are never cached:
    replies always come from the network.
 
@@ -9,7 +9,7 @@
    serving the previous build.
    ========================================================================== */
 
-const VERSION = 'tralix-v6';
+const VERSION = 'tralix-v9';
 const CACHE_PREFIX = 'tralix-';
 const SHELL = [
   './',
@@ -27,6 +27,7 @@ const SHELL = [
   './assets/js/personality.js',
   './assets/js/tools.js',
   './assets/js/voice.js',
+  './assets/js/demo.js',
   './assets/js/scrolling.js',
   './assets/js/providers.js',
   './assets/js/api/client.js',
@@ -37,6 +38,7 @@ const SHELL = [
   './assets/js/ui/feedback.js',
   './assets/js/ui/status.js',
   './assets/js/ui/messages.js',
+  './assets/js/ui/assistant.js',
   './assets/js/ui/composer.js',
   './assets/js/ui/chat.js',
   './assets/js/ui/sidebar.js',
@@ -50,6 +52,8 @@ const SHELL = [
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
   './icons/icon-maskable-512.png',
+  './icons/favicon-32.png',
+  './icons/mark.svg',
 ];
 
 self.addEventListener('install', (event) => {

@@ -127,7 +127,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`TRALIX backend listening on http://${HOST}:${PORT}`);
+  console.log(`JARVIS backend listening on http://${HOST}:${PORT}`);
   console.log(`  key configured: ${env.OPENAI_API_KEY ? 'yes' : 'NO — set OPENAI_API_KEY'}`);
   if (SERVE_STATIC) console.log(`  serving the app from ${root}`);
 });

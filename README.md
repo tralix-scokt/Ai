@@ -1,261 +1,119 @@
-# TRALIX AI
+# JARVIS AI
 
-**Intelligent AI Assistant** — a mature, mobile-first AI assistant you can install
-on your Home Screen, plus a secure backend that keeps the OpenAI key on the server.
+**A personal intelligence interface, designed for mobile.** JARVIS keeps the existing chat, history, memory, projects, settings, and secure backend while adding a cinematic assistant stage, an animated energy core, and an explicit local demo for trying the app before a model is connected.
 
-```
-User
- ↓
-TRALIX AI frontend                    (static PWA — GitHub Pages safe)
- ↓
-Secure TRALIX backend / API           (holds the key, enforces the rules)
- ↓
-OpenAI API → OpenAI model
- ↓
-TRALIX backend → TRALIX AI frontend → User
-```
+The demo is deliberately not presented as AI: its fixed sample replies are tagged **LOCAL DEMO · NOT AI**. A real response requires a verified backend or the separately opted-in device-only provider transport.
 
-No scraping, no browser automation, no ChatGPT.com behind the scenes: the app talks
-to the official **OpenAI Responses API** through our own `/api/chat` endpoint.
+## At a glance
 
----
+| Works without an AI API | Needs a live model/provider |
+| --- | --- |
+| Immersive and conversation views; animated core and state indicators | Open-ended, model-generated answers |
+| Local demo conversations, saved chat history, search, projects, and memory | Model-based analysis, coding, drafting, and research |
+| Browser speech output where `SpeechSynthesis` is available | Backend-backed web search, only when enabled on that deployment |
+| Speech input only when the browser exposes recognition; otherwise typing and iPhone keyboard dictation | Any live-data lookup or tool that is not explicitly enabled |
+| PWA app shell and previously cached static assets | Attachments and system-screen/app control are not provided |
 
-## What it is now
+JARVIS does **not** fake control of iOS, Safari, or other apps. Conversations, settings, and memories are stored in this browser. Do not put provider secrets in frontend code or in a public `backend.json` file.
 
-| This is TRALIX | This is not |
-|---|---|
-| An independent product identity (TRALIX AI · Intelligent AI Assistant) | A rebranded vendor chat window |
-| A mobile-first, iPhone-optimised interface | A desktop app squeezed onto a phone |
-| A secure backend + a static frontend | An API key pasted into JavaScript |
-| Honest about what it can and cannot do | A demo that pretends features exist |
+## Preview locally
 
-**JARVIS is a personality mode inside TRALIX**, not the product name.
-**Provider model names are an implementation detail** — users choose
-*TRALIX Fast / Smart / Code / Research*.
-
----
-
-## Quick start
-
-### 1. Try the interface (no backend yet)
+Node 18+ is required. From the repository root:
 
 ```bash
-npx serve .            # or: python3 -m http.server
+npm run serve
+# Open http://localhost:8787
 ```
 
-The UI loads fully. Without a backend, sending a message produces a clear,
-professional error state instead of a fake reply.
+No `OPENAI_API_KEY` is needed to preview the interface. With no saved device key and no verified backend, automatic mode selects the local demo; sending a message will not call the chat API. To check the backend path without using a real credential, run the test suite instead.
 
-### 2. Run the whole product locally (recommended)
+For an iPhone XS Max-sized browser preview, use a **414 × 896 CSS-pixel** viewport in your desktop browser's responsive/device mode, then test both portrait and landscape. To view it on a physical iPhone over the same Wi-Fi, set `HOST=0.0.0.0 PORT=8787` before starting the server and open `http://<computer-LAN-IP>:8787` in Safari. That HTTP LAN preview is for layout only: iOS speech recognition and service-worker/PWA installation require a secure context. For those, use an HTTPS deployment/tunnel, open the URL in iPhone Safari, then choose **Share → Add to Home Screen**. No physical iPhone test is claimed by this repository change.
+
+## Deploy the frontend and API to Render
+
+The app is configured as a **single Render Web Service**: the Node server serves the static JARVIS PWA and `/api` from the same HTTPS origin. The repository's `render.yaml` is the Render Blueprint; it builds with `npm run check`, starts with `npm run serve`, and checks `/api/health`. `backend.json` intentionally keeps an empty `url`, so the frontend uses its same-origin API.
+
+1. Push this configuration to the GitHub branch you want Render to deploy, then in Render choose **New → Blueprint** and connect the repository/branch. Review the configured service and plan before creating it. The blueprint names the service `jarvis-ai` and currently specifies Render's `starter` plan.
+2. Open the HTTPS URL Render assigns. The UI and API should both be on that origin. With no provider key, the health endpoint reports the backend as unconfigured; this is expected, and the local demo still works.
+3. For live model responses, add `OPENAI_API_KEY` as a **secret environment variable in the Render dashboard**, then redeploy. This is optional; the key is not in `render.yaml`, `backend.json`, or browser code. Never commit it.
+4. If Render assigns a hostname other than `https://jarvis-ai.onrender.com`, or you add a custom domain, set `TRALIX_ALLOWED_ORIGINS` in the service environment to the exact app origin. The frontend/API calls themselves remain same-origin.
+
+If you already have a Render API service, update that service instead of creating a second one: set its build command to `npm run check`, start command to `npm run serve` (equivalent to `node server/node.js --static`), and health check path to `/api/health`. This preserves the existing API while adding the UI and avoids running duplicate services. `render.json` also reflects the combined start mode for the existing Render setup.
+
+Before switching from GitHub Pages or another host, export your JARVIS data in **Settings → Data**, then import that backup on the Render origin. Browsers keep local data separately for each origin, so chat history, settings, and memories do not automatically transfer. The device-only provider key is not included in the export.
+
+To install the deployed PWA on iPhone XS Max, open its HTTPS Render URL in Safari, tap **Share → Add to Home Screen**, then launch JARVIS from the Home Screen. Reopen once after deployment to install the updated app shell. The local Arena preview is not a Render deployment; an actual Render URL is available only after the repository is connected and deployed there.
+
+## Modes and voice
+
+- **Immersive** is the assistant home with a lightweight CSS energy core. **Conversation** shows the familiar chat thread. The core reflects idle, listening, thinking, generating, speaking, and error states; hidden tabs pause its animation, and reduced-motion preferences are respected.
+- **Auto** uses local samples until the secure backend is verified, unless you have explicitly configured the device-only provider path. **Demo** always uses local samples. **Live** never silently falls back to a canned reply; if setup is missing, JARVIS says so. Each demo response and the runtime control identify the selected path.
+- Output uses the browser's built-in `SpeechSynthesis` API and installed voices when present. Input support is detected at runtime. Microphone access is initiated only after tapping the mic; unsupported browsers, denied permission, silence, and recognition errors have clear fallbacks. On iPhone, keyboard dictation remains an option.
+- Use the stop controls to cancel generation or speech. Existing chat history, retries, clear-chat confirmation/undo, and local data export/import are preserved.
+
+## Connect a real model (optional)
+
+The recommended path keeps the provider key on the server. The existing backend serves the static app and `/api` from one origin:
 
 ```bash
-OPENAI_API_KEY=sk-... node server/node.js --static
-# → http://localhost:8787
+OPENAI_API_KEY='your-key' npm run serve
 ```
 
-### 3. Deploy
-
-**Frontend** — already static: push to `main`; GitHub Pages serves the app shell.
-(`.nojekyll` is present, all paths are relative, and the manifest keeps `id: "/Ai/"`.)
-After deploying, hard-refresh once so the new service worker replaces the old shell.
-
-**Backend** — it must be deployed separately, because GitHub Pages cannot run
-server code and cannot hold a secret. Pick one:
-
-```bash
-# Cloudflare Workers, via GitHub Actions (nothing to install)
-#   1. add repo secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, OPENAI_API_KEY
-#   2. run the "Deploy TRALIX backend" workflow — it prints the worker URL
-
-# …or from your machine
-export OPENAI_API_KEY=sk-...
-./tools/deploy-backend.sh
-
-# …or self-host the app and the API together on any Node 18+ box
-OPENAI_API_KEY=sk-... node server/node.js --static
-```
-
-**Connect the two** — put the backend URL in `backend.json` (a public pointer,
-never a key) and push:
+The key is read by the server process; never paste it into frontend source or `backend.json`. Configure a separately hosted backend URL in the app's **Connect** sheet, or set the public pointer in `backend.json`:
 
 ```json
-{ "url": "https://tralix-backend.<your-subdomain>.workers.dev" }
+{ "url": "https://your-backend.example.com" }
 ```
 
-The frontend resolves its API base from, in order: a device override saved in
-the app, `window.TRALIX_API_BASE`, `?api=https://…`, `backend.json`, then same
-origin. **Diagnostics** always reports which one is in use. For one device only,
-paste the URL in the Connect sheet (sidebar → connection row → **Set up**) and
-tap **Save & test** — that check performs a real upstream round-trip.
+For a low-cost first live test, select **JARVIS Fast** (the current backend default maps it to `gpt-5-mini`) and set a small spend limit with your provider. Check current provider pricing and model availability before enabling requests. Usage may incur charges. The backend's `OPENAI_API_KEY` is required only on the server.
 
-### Environment / secrets
+The existing optional **This device only — my own provider key** path is retained in Advanced settings for users who explicitly choose it. It calls the provider directly from the browser and stores the user's own key on that device; it is less protective than the recommended backend. JARVIS adds no paid speech service or voice dependency.
 
-### Environment / secrets
+### Existing backend notes
 
-| Variable | Where | Required | Notes |
-|---|---|---|---|
-| `OPENAI_API_KEY` | **server only** | yes | Never in the frontend, never in Git, never logged. |
-| `TRALIX_MODEL_FAST/_SMART/_CODE/_RESEARCH` | server | no | Override the tier → model mapping. |
-| `TRALIX_ALLOWED_ORIGINS` | server | no | Comma-separated CORS allowlist (default `*`). |
-| `TRALIX_ENABLE_WEB_SEARCH` | server | no | `true` enables the OpenAI web-search tool and flips the UI capability to *Available*. |
-| `OPENAI_BASE_URL` | server | no | Gateway/proxy override. |
-| `PORT` | server | no | Node adapter port (default 8787). |
+- `server/node.js --static` serves the app and API on the same origin; `server/worker.js` is the Cloudflare Worker implementation.
+- The backend uses the OpenAI Responses API and reads `OPENAI_API_KEY` server-side. Chat streaming and model availability are verified from backend health responses.
+- `TRALIX_MODEL_FAST`, `TRALIX_MODEL_SMART`, `TRALIX_MODEL_CODE`, and `TRALIX_MODEL_RESEARCH` can override tier mappings. `TRALIX_ENABLE_WEB_SEARCH=true` advertises the optional backend search tool.
+- See [`server/README.md`](server/README.md) and [`server/.env.example`](server/.env.example) for deployment and environment details. Internal `tralix-*` tier IDs remain for backend/storage compatibility; user-facing labels are JARVIS-branded.
 
-See `server/.env.example` and `server/README.md`.
+## iOS/PWA design notes
 
----
+The interface uses the existing visual-viewport sizing and in-layout composer, respects safe-area insets, supports portrait and landscape, and keeps the chat pane as the scroll container. Controls are touch-friendly; sheets and drawers manage scroll locking and focus; reduced-motion styles disable decorative animation. The CSS core avoids a continuous WebGL render loop to stay lightweight on older phones.
 
-## Model system
+PWA metadata and app icons are preserved and JARVIS-branded. The service worker caches the static app shell only; API calls and `backend.json` are deliberately never cached. On a deployment, reload once to install the updated service worker and icons.
 
-Users see tiers; the backend resolves them to provider models.
-
-| Tier | Tagline | Default mapping | Reasoning |
-|---|---|---|---|
-| `tralix-fast` | Fast responses | `gpt-5-mini` | minimal |
-| `tralix-smart` | More capable reasoning | `gpt-5` | low |
-| `tralix-code` | Programming-focused | `gpt-5-codex` | medium |
-| `tralix-research` | Research-oriented | `gpt-5` | high |
-
-Every default is overridable by environment variable, so model churn never requires
-a frontend change. Provider details surface only in **Settings → Advanced**, and in
-debug mode the picker shows the resolved model.
-
----
-
-## What is preserved from the previous build
-
-- All existing conversations, memories and settings — a real migration
-  (`jarvis.*.v1` → `tralix.*.v2`) runs on first launch and **leaves the old keys
-  untouched**, so nothing is lost and a rollback still finds its data.
-- Memory (now categorised: Personal · Preferences · Projects · Instructions · Other,
-  with edit/delete and an undo on delete).
-- Voice: push-to-talk speech recognition and spoken replies (now with voice choice,
-  speed, pitch, auto-speak and sentence-chunked playback for iOS).
-- PWA install, standalone display, safe-area handling, offline app shell.
-- Export / import backup, clear conversations, erase everything.
-- The optional bring-your-own-key provider mode (moved to Advanced, device-only).
-- The dark/light theme, the general look of the orb mark, and the deployment shape.
-
-## What is new
-
-- Sidebar information architecture: New chat, Search, Projects, conversation
-  history grouped Today / Yesterday / Previous 7 days, Settings, user area.
-  Collapsible on desktop, slide-out drawer on mobile.
-- Chat: streaming with *TRALIX is thinking…*, Stop generating, and per-response
-  actions (Copy · Regenerate · Read aloud · Like · Dislike · More →
-  Continue / Shorter / Longer / Explain / Rewrite / Save).
-- Markdown rendering with highlighted code blocks, language labels, copy buttons
-  and horizontal scrolling; tables, task lists, quotes, links.
-- The TRALIX system personality: precise, calm, professional, no filler enthusiasm,
-  with an explicit honesty policy about tools and live data.
-- Response styles (Concise / Balanced / Detailed) and personality modes
-  (TRALIX / JARVIS / Custom).
-- Settings split into General · AI · Voice · Memory · Data · Advanced, with a
-  diagnostics report and a developer debug panel.
-- Projects, chat search across titles *and* message text (with snippets), rename,
-  pin, archive with undo, delete with undo.
-- A tool layer (`assets/js/tools.js`) that describes real capabilities and refuses
-  to fake the ones that are not deployed.
-- Professional error states, keyboard shortcuts (⌘K, ⌘⇧O, ⌘/), a TRALIX status
-  indicator (idle · listening · thinking · generating · speaking · error) and
-  reduced-motion support.
-
----
-
-## Mobile & scroll contract
-
-The layout is built so a long conversation scrolls with a finger on iPhone:
-
-- the document never scrolls; the message column does,
-- no `overflow: hidden` on `html`/`body` in normal use — the lock is reference-counted
-  and only while a drawer or modal is genuinely open, then always released
-  (including on page hide and via a safety valve),
-- no `position: fixed` page locking and no `touch-action: none` on the body,
-- the app is fitted to `visualViewport` (`--vvh` + explicit height), so the keyboard
-  cannot push the composer off screen,
-- `env(safe-area-inset-*)` is respected top and bottom; the composer sits inside the
-  layout, not fixed over it, and never blocks scrolling.
-
----
-
-## Capabilities, honestly
-
-| Capability | State |
-|---|---|
-| Chat with streaming replies | **Available** (needs the backend configured) |
-| Memory, projects, voice, PWA offline shell | **Available** |
-| Web search | **Only** if the backend sets `TRALIX_ENABLE_WEB_SEARCH=true`; otherwise TRALIX says it cannot check live data |
-| Attachments (PDF/TXT/DOCX/images/code) | **Not deployed** — the button explains this instead of pretending |
-| Code execution, calendar, reminders, weather, news | **Not deployed** — listed in the tool layer as unavailable |
-
-`/api/health` is the source of truth: the UI marks a capability available only when
-the backend advertises it.
-
----
-
-## Testing
+## Validation
 
 ```bash
-npm run check      # syntax, JSON, asset refs, SW shell, secret scan, DOM contract
-npm test           # 121 logic tests (markdown, memory, migration, tools, scroll…)
-npm run verify     # both
-
-npm install --no-save jsdom
-npm run test:dom   # 62 integration checks: boots the real app in jsdom and drives
-                   # send/stream/error/sheets/drawer/search/projects/memory/transport
+npm run check       # syntax, JSON, asset references, service-worker shell, security scan, DOM contract
+npm test            # deterministic logic and voice helpers
+npm run test:backend
+npm run test:dom    # UI interactions, modes, demo/live paths, history, mobile scroll contract
+npm run verify      # all checks above
 ```
 
-`npm run check` also fails the build if a key-like string, a `chatgpt.com`
-reference, or a frontend call to a provider API is ever committed.
+The DOM suite uses jsdom, not a physical iPhone browser. Device-only behavior (especially Safari speech recognition, Home Screen installation, safe-area rendering, and the virtual keyboard) still needs manual iPhone verification.
 
----
+## Project map
 
-## Project structure
-
-```
-index.html                     app shell: sidebar, chat, composer, all overlays
-assets/app.css                 design system (tokens, dark/light, mobile-first)
-assets/js/
-  app.js                       boot + wiring only
-  config.js                    identity, feature flags, backend URL resolution
-  errors.js                    one error vocabulary → friendly messages
-  store.js                     persistence + migration from the Jarvis build
-  models.js                    TRALIX tiers ↔ provider models
-  personality.js               TRALIX system prompt, styles, memory extraction
-  markdown.js  highlight.js    safe rendering and syntax highlighting
-  tools.js                     tool layer (availability-honest)
-  voice.js                     speech in / speech out (iOS-first)
-  scrolling.js                 viewport fitting + scroll-lock manager
-  api/client.js                fetch, timeouts, SSE parsing
-  api/backend.js               TRALIX backend client (default transport)
-  api/local.js                 optional device-only provider transport
-  api/chat.js                  transport selection + request assembly
-  ui/…                         sheets, feedback, status, messages, composer, chat,
-                               sidebar, search, memory, projects, models,
-                               settings, doctor
-server/
-  worker.js                    Cloudflare Worker: /api/chat, /api/health, /api/models
-  node.js                      Node 18+ adapter (optionally serves the frontend)
-  wrangler.toml  .env.example  deployment config
-sw.js                          offline app shell (API traffic is never cached)
-manifest.webmanifest           PWA metadata (TRALIX AI)
-tests/                         logic tests + jsdom integration test
-tools/check.mjs                static validation / secret scan
+```text
+index.html                     JARVIS PWA shell and immersive/conversation UI
+assets/app.css                 visual system, animated core, iOS/mobile/accessibility rules
+assets/js/app.js               app boot, backend health, and voice/runtime wiring
+assets/js/demo.js              deterministic, abortable local samples (explicitly not AI)
+assets/js/voice.js             runtime speech feature detection and browser voice APIs
+assets/js/ui/assistant.js      view mode, capability readouts, and demo/live controls
+assets/js/ui/chat.js           chat, streaming, cancellation, retries, history
+assets/js/api/                 existing secure backend and opt-in local transports
+server/                        existing Node and Cloudflare backend
+render.yaml                    Render Blueprint for the same-origin app + API service
+icons/                         SVG mark and PWA/iOS raster icons
+manifest.webmanifest           JARVIS install metadata (root-hosted PWA)
+sw.js                          offline static app shell; API traffic is excluded
+tests/                         logic, backend, and jsdom interaction suites
+tools/check.mjs                static validation and secret scan
 ```
 
----
-
-## Privacy
-
-- Conversations, memories and settings live in **this browser**. Nothing is uploaded
-  to a TRALIX server; only the messages needed for a reply are sent to the backend,
-  which forwards them to OpenAI and stores nothing.
-- The backend never logs message content, never returns the key, and refuses to run
-  without one rather than pretending.
-- Sensitive content (card numbers, passwords, API keys, IDs) is refused by the memory
-  system even if you ask it to remember them.
-- Exports never include a key.
-
-## Licence
+## License
 
 UNLICENSED — private project.

@@ -116,7 +116,7 @@ group('a rejected key is reported as rejected, with no key material leaking');
   const error = frames.find(f => f.type === 'error');
   t('an error frame is sent', Boolean(error));
   t('it maps to unauthorized', error?.code === 'unauthorized', error?.code);
-  t('the message is human, not a raw upstream body', error?.userMessage === 'The AI service rejected the TRALIX server key. Check OPENAI_API_KEY on the backend.');
+  t('the message is human, not a raw upstream body', error?.userMessage === 'The AI service rejected the JARVIS backend credentials. Check OPENAI_API_KEY on the server.');
   t('the upstream body is not forwarded to the client', !JSON.stringify(frames).includes('Incorrect API key'));
   t('no key material appears in any frame', !JSON.stringify(frames).includes('sk-test-key-not-real'));
 }
@@ -148,12 +148,12 @@ group('POST /api/chat streams a real Responses-API conversation');
   t('the tier resolved to the code model upstream', state.requests.at(-1)?.model === 'gpt-5-codex', state.requests.at(-1)?.model);
   t('the model frame names the resolved model', modelFrame?.model === 'gpt-5-codex', modelFrame?.model);
   t('text arrives as multiple deltas', deltas.length > 1, `${deltas.length} deltas`);
-  t('the deltas reconstruct the answer', deltas.map(d => d.text).join('') === 'TRALIX test reply to: Write me a hello world');
+  t('the deltas reconstruct the answer', deltas.map(d => d.text).join('') === 'JARVIS test reply to: Write me a hello world');
   t('a usage frame reports tokens', usage?.usage?.total > 0, JSON.stringify(usage));
   t('a done frame closes the stream', done?.type === 'done');
   t('done carries the resolution status', done?.status === 'completed', done?.status);
   t('the upstream received a Bearer token', state.requests.at(-1)?.auth === 'bearer');
-  t('the server-side TRALIX identity block is applied', state.requests.at(-1)?.hasInstructions === true);
+  t('the server-side JARVIS identity block is applied', state.requests.at(-1)?.hasInstructions === true);
   t('code tier asks for medium reasoning effort', state.requests.at(-1)?.reasoning?.effort === 'medium', JSON.stringify(state.requests.at(-1)?.reasoning));
   t('the upstream stream completed', state.completions === 1, `completions=${state.completions}`);
 }
@@ -299,6 +299,8 @@ group('GET /api/models is the source of truth for configuration');
   t('each tier names a provider and a model', Object.values(body.models).every(m => m.provider === 'openai' && typeof m.model === 'string'));
   t('tralix-code maps to the codex model', body.models['tralix-code'].model === 'gpt-5-codex');
   t('tralix-fast maps to the mini model', body.models['tralix-fast'].model === 'gpt-5-mini');
+  t('live model labels are JARVIS-branded', body.models['tralix-fast'].label === 'JARVIS Fast'
+    && body.models['tralix-smart'].label === 'JARVIS Smart');
   t('availability reflects the upstream model list', body.models['tralix-smart'].available === true);
   t('the default tier is declared', body.default === 'tralix-smart');
   t('configuration state is included', body.configured === true && body.verified === true);
@@ -323,6 +325,7 @@ group('tier → model mapping is env-configurable');
   });
   const text = (await readFrames(res2)).filter(f => f.type === 'delta').map(f => f.text).join('');
   t('the request goes out with the overridden model', /model=gpt-5.5-luna/.test(text), text);
+  t('server-enforced JARVIS identity reaches the provider', /instructions=present/.test(text), text);
 }
 
 /* ============================ 12. no server key in the frontend ========== */

@@ -1,20 +1,21 @@
 # ============================================================================
 # Deploys the TRALIX backend (server/worker.js) to Cloudflare Workers.
 #
-# The frontend on GitHub Pages stays static; only this API layer is deployed
-# separately. No secret is ever written into the repository — the key is read
-# from GitHub Actions secrets and pushed to the worker as an encrypted secret.
+# This is an optional separate-API deployment; the recommended Render Blueprint
+# serves the frontend and API together. No secret is written into the repository —
+# the key is read from GitHub Actions secrets and pushed as an encrypted secret.
 #
 # One-time setup (repository → Settings → Secrets and variables → Actions):
 #   Secrets:  CLOUDFLARE_API_TOKEN     (Workers Scripts: Edit permission)
 #             CLOUDFLARE_ACCOUNT_ID
 #             OPENAI_API_KEY           (the real key — never committed)
 #   Variables (optional):
-#             TRALIX_ALLOWED_ORIGINS   default: the GitHub Pages origin below
+#             TRALIX_ALLOWED_ORIGINS   default: https://jarvis-ai.onrender.com
 #             TRALIX_MODEL_SMART etc.  tier → model overrides
 #
-# After it runs, copy the printed worker URL into ./backend.json so the
-# GitHub Pages frontend knows where its backend is.
+# If deliberately using this separate Worker with the Render frontend, set the
+# allowed origin to the actual Render app URL and put the printed Worker URL in
+# backend.json. Leave backend.json's url empty for the combined Render service.
 # ============================================================================
 name: Deploy TRALIX backend
 
@@ -63,7 +64,7 @@ jobs:
           command: >-
             deploy worker.js
             --name tralix-backend
-            --var TRALIX_ALLOWED_ORIGINS:${{ github.event.inputs.allowed_origins || vars.TRALIX_ALLOWED_ORIGINS || 'https://tralix-scokt.github.io' }}
+            --var TRALIX_ALLOWED_ORIGINS:${{ github.event.inputs.allowed_origins || vars.TRALIX_ALLOWED_ORIGINS || 'https://jarvis-ai.onrender.com' }}
             --var TRALIX_ENABLE_WEB_SEARCH:${{ vars.TRALIX_ENABLE_WEB_SEARCH || 'false' }}
             ${{ vars.TRALIX_MODEL_SMART && format('--var TRALIX_MODEL_SMART:{0}', vars.TRALIX_MODEL_SMART) || '' }}
 
@@ -87,9 +88,9 @@ jobs:
         run: |
           URL=$(echo "${{ steps.deploy.outputs.deployment-url }}" | tr -d '[:space:]')
           echo "worker URL: $URL"
-          echo "### TRALIX backend deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "### JARVIS backend deployed" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Health: \`$URL/api/health?probe=1\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Next: put \`$URL\` in \`backend.json\` (url field) and push." >> "$GITHUB_STEP_SUMMARY"
+          echo "For a split deployment only: put \`$URL\` in \`backend.json\` (url field) and set the allowed origin to the Render app URL." >> "$GITHUB_STEP_SUMMARY"
           curl -fsS "$URL/api/health" | head -c 600 || echo "health check pending — run it again in a minute"

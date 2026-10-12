@@ -146,7 +146,7 @@ export function createSettings(deps) {
     const custom = settings.personality === 'custom';
     $('#personaInput').disabled = false;
     $('#personaInput').placeholder = custom
-      ? 'Describe how TRALIX should talk to you'
+      ? 'Describe how JARVIS should talk to you'
       : 'Switch to Custom to write your own instructions';
   }
 
@@ -319,7 +319,7 @@ export function createSettings(deps) {
         onDataReplaced();
         toast('Backup imported', { tone: 'success' });
       } catch (err) {
-        toast('That file is not a TRALIX backup', { tone: 'error' });
+        toast('That file is not a JARVIS backup', { tone: 'error' });
         console.warn('[tralix] import failed', err);
       }
     });
@@ -392,7 +392,7 @@ export function createSettings(deps) {
     $('#advLocalBlock').hidden = settings.advanced.transport !== 'local';
     hint.textContent = settings.advanced.transport === 'local'
       ? 'Requests go straight from this device to the provider. Your key stays in this browser — but it is exposed to the client, so only use this with a key you control.'
-      : 'Recommended. The key lives on the TRALIX server and never reaches this app.';
+      : 'Recommended. The key lives on the JARVIS server and never reaches this app.';
   }
 
   function wireAdvanced() {
@@ -423,7 +423,7 @@ export function createSettings(deps) {
       settings.advanced.transport = event.target.value;
       saveSettings(settings);
       syncAdvanced();
-      toast(event.target.value === 'local' ? 'Using your own key on this device' : 'Using the TRALIX backend');
+      toast(event.target.value === 'local' ? 'Using your own key on this device' : 'Using the JARVIS backend');
     });
 
     $('#advProvider').addEventListener('change', (event) => {
