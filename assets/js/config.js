@@ -1,15 +1,18 @@
 /* ==========================================================================
    config.js — single place for product identity and runtime configuration.
 
-   TRALIX AI is provider-agnostic: the UI never talks to an AI vendor directly.
-   It talks to the TRALIX backend (`/api/chat`), which holds the vendor key
-   server-side. See server/README.md for deployment.
+   JARVIS STUDIO is provider-agnostic: the UI never talks to an AI vendor
+   directly. It talks to the JARVIS backend (`/api/chat`), which holds the
+   vendor key server-side. See server/README.md for deployment.
+
+   Renamed from TRALIX AI to JARVIS STUDIO: storage keys, tier ids and every
+   environment variable keep their old names so existing installs keep working.
    ========================================================================== */
 
 export const APP = {
-  name: 'TRALIX AI',
-  shortName: 'TRALIX',
-  tagline: 'Intelligent AI Assistant',
+  name: 'JARVIS',
+  shortName: 'JARVIS',
+  tagline: 'AI Coding Workspace',
   version: '2.0.0',
   supportEmail: '',                       // optional, shown in error states
 };

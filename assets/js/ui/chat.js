@@ -16,6 +16,7 @@ import { needsLiveInfo } from '../tools.js';
 import * as Store from '../store.js';
 import * as Voice from '../voice.js';
 import * as Api from '../api/chat.js';
+import * as V2 from '../api/v2.js';
 import { isNearBottom, scrollToEnd } from '../scrolling.js';
 import { messageNode, updateMessageBody, dayDivider, closeAllMoreMenus } from './messages.js';
 import { toast } from './feedback.js';
@@ -81,9 +82,20 @@ export function createChatController(deps) {
       isLast,
       speakingId,
       ttsSupported: Voice.ttsSupported,
-      modelLabel: modelLabel(getSettings().model),
+      modelLabel: modelLabelFor(msg),
       onAction: handleAction,
     };
+  }
+
+  /**
+   * Which model answered. Before routing, that was the tier the user picked
+   * ("JARVIS Smart"); with routing it is the provider that actually replied,
+   * because claiming a model that did not answer would be a lie.
+   */
+  function modelLabelFor(msg) {
+    if (msg?.providerLabel && msg?.model) return `${msg.providerLabel} · ${msg.model}`;
+    if (msg?.provider) return `${msg.provider} · ${msg.model || ''}`.trim();
+    return modelLabel(getSettings().model);
   }
 
   /** Re-render a single message node in place (keeps scroll position stable). */
@@ -112,7 +124,7 @@ export function createChatController(deps) {
       const health = deps.getHealth?.();
       if (health && !health.ok) {
         note.hidden = false;
-        text.textContent = health.message || 'The TRALIX backend is not reachable.';
+        text.textContent = health.message || 'The JARVIS backend is not reachable.';
         btn.textContent = 'Set up';
         btn.onclick = () => deps.onOpenConnect?.();
       } else {
@@ -244,9 +256,17 @@ export function createChatController(deps) {
         instructions,
         signal: controller.signal,
         onDelta,
+        onModel: (info) => {
+          botMsg.provider = info?.provider || '';
+          botMsg.providerLabel = info?.providerLabel || info?.provider || '';
+          botMsg.model = info?.model || botMsg.model;
+          botMsg.paid = Boolean(info?.paid);
+        },
       });
       full = result?.text ?? full;
       if (result?.model) botMsg.model = result.model;
+      if (result?.providerLabel) botMsg.providerLabel = result.providerLabel;
+      if (result?.provider) botMsg.provider = result.provider;
     } catch (err) {
       if (err?.name === 'AbortError' || err?.code === ERROR_CODES.aborted) {
         failure = null;                                  // deliberate stop
@@ -445,7 +465,7 @@ export function createChatController(deps) {
     if (!summary) return;
     const saved = Store.addMemory(summary, { source: 'saved-response' });
     if (saved?.refused) {
-      toast('That looks sensitive, so TRALIX did not store it.', { tone: 'error' });
+      toast('That looks sensitive, so JARVIS did not store it.', { tone: 'error' });
       return;
     }
     if (!saved) {
@@ -479,40 +499,119 @@ export function createChatController(deps) {
   }
 
   /* ---------------------------------- voice ------------------------------- */
-  function speakMessage(msg, { auto = false } = {}) {
-    const settings = getSettings();
-    if (!Voice.ttsSupported) {
-      composerToast('Speech is not available in this browser.');
-      return;
+  /*
+   * Two engines, tried in this order:
+   *   1. the server's voice provider (Fish Audio) when the backend has one —
+   *      the key lives on the server, the browser only plays audio;
+   *   2. the device's own speech synthesis, which needs no key and no network.
+   * If the first is not configured or fails, the second takes over and nothing
+   * is claimed about which one spoke.
+   */
+  let serverVoiceState = null;        // null = not asked yet, false = unavailable
+  let serverAudio = null;
+
+  async function serverVoice() {
+    if (serverVoiceState !== null) return serverVoiceState;
+    try {
+      const status = await V2.voiceStatus({});
+      serverVoiceState = status?.configured ? status : false;
+    } catch {
+      serverVoiceState = false;
     }
+    return serverVoiceState;
+  }
+
+  /** Speak through the server provider and resolve when the audio finishes. */
+  function playServerSpeech(text, { speed = 1 }) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      V2.speak(text, { speed }).then(({ url, revoke }) => {
+        serverAudio = new Audio(url);
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          try { serverAudio.pause(); } catch { /* already stopped */ }
+          serverAudio = null;
+          revoke?.();
+          resolve();
+        };
+        serverAudio.addEventListener('ended', finish, { once: true });
+        serverAudio.addEventListener('error', () => {
+          if (settled) return;
+          settled = true;
+          serverAudio = null;
+          revoke?.();
+          reject(new Error('The spoken audio could not be played.'));
+        }, { once: true });
+        serverAudio.play().catch((err) => {
+          if (settled) return;
+          settled = true;
+          serverAudio = null;
+          revoke?.();
+          reject(err instanceof Error ? err : new Error('Playback was blocked.'));
+        });
+      }).catch(reject);
+    });
+  }
+
+  async function speakMessage(msg, { auto = false } = {}) {
+    const settings = getSettings();
     const text = stripMarkdown(msg.text);
     if (!text) return;
 
-    speakingId = msg.id;
-    onSpeakingChange(speakingId);
-    refreshNode(msg);
-    setStatus('speaking');
+    const clear = () => {
+      if (speakingId === msg.id) {
+        speakingId = null;
+        onSpeakingChange(null);
+        const chat = getChat();
+        const current = chat?.messages.find(m => m.id === msg.id);
+        if (current) refreshNode(current);
+      }
+      setStatus('idle');
+    };
 
+    const begin = () => {
+      speakingId = msg.id;
+      onSpeakingChange(speakingId);
+      refreshNode(msg);
+      setStatus('speaking');
+    };
+
+    if (await serverVoice()) {
+      begin();
+      try {
+        await playServerSpeech(text, { speed: settings.voice.rate });
+        clear();
+        if (!auto) haptic(4);
+        return;
+      } catch {
+        // Ask again next time: a transient failure is not a configuration.
+        serverVoiceState = null;
+      }
+    }
+
+    if (!Voice.ttsSupported) {
+      composerToast('Speech is not available in this browser.');
+      clear();
+      return;
+    }
+
+    begin();
     Voice.speak(text, {
       voiceURI: settings.voice.voiceURI,
       rate: settings.voice.rate,
       pitch: settings.voice.pitch,
-      onEnd: () => {
-        if (speakingId === msg.id) {
-          speakingId = null;
-          onSpeakingChange(null);
-          const chat = getChat();
-          const current = chat?.messages.find(m => m.id === msg.id);
-          if (current) refreshNode(current);
-          setStatus('idle');
-        }
-      },
+      onEnd: clear,
     });
     if (!auto) haptic(4);
   }
 
   function stopSpeaking() {
     Voice.stopSpeaking();
+    if (serverAudio) {
+      try { serverAudio.pause(); } catch { /* nothing to stop */ }
+      serverAudio = null;
+    }
     speakingId = null;
     onSpeakingChange(null);
     render();

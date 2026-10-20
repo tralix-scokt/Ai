@@ -145,7 +145,7 @@ export function createSidebar(deps) {
 
     const sep = () => { const s = document.createElement('div'); s.className = 'sep'; menu.appendChild(s); };
 
-    item(`Model · ${deps.getModelLabel?.() || 'TRALIX'}`, '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-4.4 3.6L16.6 19 12 16.2 7.4 19l1-5.4L4 10l5.8-1.6z"/></svg>', async () => {
+    item(`Model · ${deps.getModelLabel?.() || 'JARVIS'}`, '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 10l-4.4 3.6L16.6 19 12 16.2 7.4 19l1-5.4L4 10l5.8-1.6z"/></svg>', async () => {
       onOpenModel();
     });
 

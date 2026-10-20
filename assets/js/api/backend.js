@@ -65,6 +65,12 @@ export async function health({ force = false, probe = false, timeoutMs = LIMITS.
 
 export const clearHealthCache = () => { healthCache = { at: 0, value: null }; };
 
+/**
+ * The last health report, without asking again. Used by the routing layer to
+ * discover whether this deployment also serves /api/v2 — no extra request.
+ */
+export const cachedHealth = () => healthCache.value;
+
 /** Model mapping (tier → provider model). Safe to fail: the local fallback applies. */
 export async function models({ probe = false } = {}) {
   try {

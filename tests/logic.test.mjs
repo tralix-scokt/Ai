@@ -2,7 +2,7 @@
    logic.test.mjs — run with:  node tests/logic.test.mjs   (or npm test)
 
    Covers the pure logic that the UI depends on: markdown + highlighting safety,
-   the TRALIX personality and memory extraction, the model tier system, storage
+   the JARVIS personality and memory extraction, the model tier system, storage
    and its migration from the previous Jarvis build, the tool layer, and the
    mobile scroll/viewport contract.
 
@@ -107,7 +107,7 @@ t('language aliases resolve', normaliseLang('typescript') === 'ts' && normaliseL
 /* ================================ identity =============================== */
 console.log('\n— personality —');
 const prompt = buildSystemPrompt({ personality: 'tralix', responseStyle: 'balanced', memory: '- [personal]\n- name is Tralix', userName: 'Tralix' });
-t('TRALIX is the primary identity', prompt.includes('TRALIX AI'), '');
+t('JARVIS is the primary identity', prompt.includes('JARVIS'), '');
 t('no Gemini/vendor identity in the prompt', !/gemini/i.test(prompt), '');
 t('memory is injected when enabled', prompt.includes('[personal]') && prompt.includes('name is Tralix'), '');
 t('user name injected', prompt.includes('Tralix'), '');
@@ -118,7 +118,7 @@ t('memory omitted when disabled',
   !buildSystemPrompt({ memory: 'secret', memoryEnabled: false }).includes('secret'), '');
 t('JARVIS mode is an optional add-on',
   buildSystemPrompt({ personality: 'jarvis' }).includes('Mode: JARVIS')
-  && buildSystemPrompt({ personality: 'jarvis' }).includes('TRALIX AI'), '');
+  && buildSystemPrompt({ personality: 'jarvis' }).includes('JARVIS'), '');
 t('custom persona replaces the default voice',
   buildSystemPrompt({ personality: 'custom', persona: 'Be terse.' }).startsWith('Be terse.'), '');
 t('response style is applied',
@@ -145,7 +145,7 @@ t('ordinary messages are not treated as remember requests',
 
 /* ================================= models ================================ */
 console.log('\n— model tier system —');
-t('four TRALIX tiers', MODELS.length === 4 && MODELS.every(m => m.id.startsWith('tralix-')), '');
+t('four JARVIS tiers (ids unchanged: tralix-*)', MODELS.length === 4 && MODELS.every(m => m.id.startsWith('tralix-')), '');
 t('no vendor names in user-facing labels',
   MODELS.every(m => !/gemini|gpt|claude/i.test(m.label)), MODELS.map(m => m.label).join(', '));
 t('legacy vendor model ids map onto tiers',
@@ -260,7 +260,7 @@ const localSettings = { advanced: { transport: 'local', apiKey: 'sk-test' } };
 t('backend is the default path', activeTransport(backendSettings) === 'backend', '');
 t('local transport requires a key', activeTransport({ advanced: { transport: 'local', apiKey: '' } }) === 'backend', '');
 t('local transport is used when configured', activeTransport(localSettings) === 'local', '');
-t('transport label is user-facing', transportLabel(backendSettings) === 'TRALIX backend', transportLabel(backendSettings));
+t('transport label is user-facing', transportLabel(backendSettings) === 'JARVIS backend', transportLabel(backendSettings));
 t('history trims hidden system turns correctly', (() => {
   const chat = { messages: [
     { role: 'assistant', text: 'stale reply' },

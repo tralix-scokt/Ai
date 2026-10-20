@@ -182,6 +182,20 @@ async function gh(token, path, { method = 'GET', body, headers = {}, raw = false
   return res.json().catch(() => ({}));
 }
 
+/**
+ * A credential can be present and still unusable because the *server* has no
+ * route to GitHub. Say which of the two failed instead of echoing "fetch
+ * failed", which tells the user nothing they can act on.
+ */
+export function reachableMessage(err) {
+  const raw = String(err?.message || err?.cause?.message || '');
+  const code = String(err?.cause?.code || err?.code || '');
+  if (/fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|ENETUNREACH/i.test(`${raw} ${code}`)) {
+    return 'The backend could not reach api.github.com (network error). Check the server’s internet access and any proxy or firewall rules.';
+  }
+  return raw || 'GitHub rejected the credential.';
+}
+
 export function githubMessage(status, vendor = '') {
   if (status === 401) return 'GitHub rejected the credential. Check GITHUB_TOKEN (or the App private key) on the backend.';
   if (status === 403) return /rate limit/i.test(vendor)
@@ -238,7 +252,7 @@ export async function status(env, { session = null } = {}) {
       connected: false,
       mode: creds.mode,
       login: '',
-      message: String(err?.message || 'GitHub rejected the credential.'),
+      message: reachableMessage(err),
     };
   }
 }

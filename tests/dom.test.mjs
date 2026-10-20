@@ -114,6 +114,11 @@ let backendJson = { url: '' };
 let fetchMode = 'down';
 let streamedText = '';
 const requests = [];
+const v2Requests = [];
+/** How the mocked deployment answers /api/v2/chat. */
+let v2Mode = 'ok';                  // 'ok' | 'blocked' | 'missing'
+/** Whether the mocked /api/health advertises the routing layer. */
+let healthV2 = false;
 
 globalThis.fetch = async (url, init = {}) => {
   const target = String(url);
@@ -134,18 +139,55 @@ globalThis.fetch = async (url, init = {}) => {
         provider: 'openai', model: 'gpt-5', tools: [],
         features: { webSearch: false, attachments: false },
         error: 'invalid_config',
-        message: 'TRALIX backend is reachable but OPENAI_API_KEY is not set.',
+        message: 'JARVIS backend is reachable but OPENAI_API_KEY is not set.',
       });
     }
     return jsonResponse({
       ok: true, status: 'ok', reachable: true, configured: true, verified: true,
       provider: 'openai', model: 'gpt-5',
-      tools: ['web_search'], features: { webSearch: true, attachments: false },
+      tools: ['web_search'],
+      features: { webSearch: true, attachments: false, multiProviderRouting: healthV2 },
+      ...(healthV2 ? { jarvis: { api: '/api/v2', studio: true } } : {}),
     });
   }
   if (target.includes('/api/models')) {
     return jsonResponse({ models: { 'tralix-smart': { provider: 'openai', model: 'gpt-5' } } });
   }
+  if (target.includes('/api/v2/chat')) {
+    v2Requests.push({ url: target, body: init.body ? JSON.parse(init.body) : null });
+
+    if (v2Mode === 'missing') {
+      // A deployment that predates the routing layer.
+      return jsonResponse({ error: { code: 'not_found', message: 'Not Found' } }, 404);
+    }
+    if (v2Mode === 'blocked') {
+      // No free model left, and paid usage is not authorised.
+      return jsonResponse({
+        error: {
+          code: 'paid_blocked',
+          message: 'No free model is available right now. Paid providers are configured but you have not authorised paid usage.',
+          requiresPaidPermission: true,
+        },
+      }, 503);
+    }
+
+    const chunks = [
+      { type: 'model', provider: 'gemini', providerLabel: 'Gemini', model: 'gemini-2.5-flash', paid: false },
+      { type: 'delta', text: 'Routed through the free tier.' },
+      { type: 'done', provider: 'gemini', providerLabel: 'Gemini', model: 'gemini-2.5-flash', paid: false, attempts: [] },
+    ];
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+        }
+        controller.close();
+      },
+    });
+    return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+  }
+
   if (target.includes('/api/chat') && fetchMode === 'slow') {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -216,7 +258,7 @@ t('provider names appear only in Advanced settings (developer surface)', (() => 
   const advanced = $('[data-section="advanced"]').textContent;
   return !/gemini/i.test(prior) && /Gemini/i.test(advanced);
 })(), '');
-t('composer placeholder', $('#composer-input').placeholder === 'Message TRALIX…');
+t('composer placeholder', $('#composer-input').placeholder === 'Message JARVIS…');
 t('composer starts disabled', $('#btnSend').disabled === true);
 
 console.log('\n— backend down (honest error state) —');
@@ -266,7 +308,7 @@ t('code block rendered with language label', lastBot?.querySelector('.code-lang'
 t('code block has a copy button', Boolean(lastBot?.querySelector('[data-copy-target]')));
 t('code is syntax highlighted', Boolean(lastBot?.querySelector('.tok-key')));
 t('request carried the TRALIX tier, not a vendor model', lastChatRequest()?.body?.model === 'tralix-smart', JSON.stringify(lastChatRequest()?.body?.model));
-t('system instructions sent with the request', (lastChatRequest()?.body?.instructions || '').includes('TRALIX AI'));
+t('system instructions sent with the request', (lastChatRequest()?.body?.instructions || '').includes('JARVIS'));
 t('composer cleared after a successful send', $('#composer-input').value === '');
 t('response actions available', [...$$('.msg-actions .act')].map(b => b.textContent).join(' ').includes('Copy'));
 t('more menu offers follow-ups', [...$$('.more-menu button')].some(b => b.textContent === 'Shorter'));
@@ -308,6 +350,63 @@ t('follow-up is not rendered as a user message',
   $$('.msg-user').length === usersBeforeFollowUp,
   `${$$('.msg-user').length} vs ${usersBeforeFollowUp}`);
 
+console.log('\n— free-first routing —');
+{
+  // Imported here (not at the top) so the section can stand on its own; the
+  // later transport section imports the same module under a different name.
+  const ChatApi = await import('../assets/js/api/chat.js');
+  const send = async (text) => {
+    $('#composer-input').value = text;
+    $('#composer-input').dispatchEvent(new window.Event('input', { bubbles: true }));
+    $('#composer').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await flush(150);
+  };
+  const lastBot = () => $$('.msg-bot').at(-1);
+
+  // The deployment advertises /api/v2, so ordinary chat must be routed.
+  healthV2 = true;
+  v2Mode = 'ok';
+  await ChatApi.refreshCapabilities({ force: true });
+  const legacyBefore = chatRequests().length;
+
+  await send('Explain closures like I am five');
+
+  t('chat is routed through /api/v2 when the backend offers it', v2Requests.length === 1,
+    `${v2Requests.length} v2 requests`);
+  t('the routed request carries the JARVIS tier, not a vendor model',
+    v2Requests[0]?.body?.tier === 'smart', JSON.stringify(v2Requests[0]?.body?.tier));
+  t('the client never asks for a paid provider', v2Requests[0]?.body?.allowPaid !== true);
+  t('the legacy single-provider endpoint was not used', chatRequests().length === legacyBefore,
+    `${legacyBefore} → ${chatRequests().length}`);
+  t('the routed reply is rendered', /Routed through the free tier/.test(lastBot()?.textContent || ''),
+    (lastBot()?.textContent || '').slice(0, 80));
+  t('the reply names the provider that actually answered',
+    /Gemini/.test(lastBot()?.querySelector('.msg-model')?.textContent || ''),
+    lastBot()?.querySelector('.msg-model')?.textContent);
+
+  // No silent paid switching: a routing block is reported, never downgraded
+  // onto the legacy key.
+  v2Mode = 'blocked';
+  await send('Write me a sonnet about TypeScript');
+  t('a blocked paid request is not silently retried on the legacy key',
+    chatRequests().length === legacyBefore, `${legacyBefore} → ${chatRequests().length}`);
+  t('the block is shown to the user as an error', Boolean($$('.msg-bot.msg-error').at(-1)));
+  t('and it says why', /free model|paid usage/i.test($$('.msg-bot.msg-error').at(-1)?.textContent || ''),
+    ($$('.msg-bot.msg-error').at(-1)?.textContent || '').slice(0, 120));
+
+  // A deployment without /api/v2 still works: only that case falls back.
+  v2Mode = 'missing';
+  await send('Are you still there?');
+  t('a deployment without /api/v2 falls back to /api/chat', chatRequests().length > legacyBefore,
+    `${legacyBefore} → ${chatRequests().length}`);
+  t('and the fallback still answers',
+    /Bold/.test($$('.msg-bot:not(.msg-error)').at(-1)?.textContent || ''));
+
+  healthV2 = false;
+  v2Mode = 'ok';
+  await ChatApi.refreshCapabilities({ force: true });
+}
+
 console.log('\n— sheets, drawer and scroll lock —');
 const lockCount = async () => (await import('../assets/js/scrolling.js')).scrollLockCount();
 const { openSheet } = await import('../assets/js/ui/sheets.js');
@@ -339,7 +438,7 @@ t('scroll lock released on close', (await lockCount()) === 0, String(await lockC
 $('#btnModel').dispatchEvent(new window.Event('click', { bubbles: true }));
 await flush(40);
 t('model picker opens', !$('#modelSheet').hidden);
-t('four TRALIX tiers offered', $$('#modelList .model-opt').length === 4);
+t('four JARVIS tiers offered', $$('#modelList .model-opt').length === 4);
 t('provider names hidden from the picker', !$('#modelList').textContent.includes('gpt-'), $('#modelList').textContent.slice(0, 80));
 t('capability list is honest about attachments',
   $('#capabilityList').textContent.includes('Unavailable'), $('#capabilityList').textContent);

@@ -117,9 +117,9 @@
       <div class="conn-row" id="connRowMini" hidden></div>
 
       <div class="conn-row" id="connRow">
-        <span class="tralix-status" id="statusSidebar" data-state="idle" role="img" aria-label="TRALIX status: idle"></span>
+        <span class="tralix-status" id="statusSidebar" data-state="idle" role="img" aria-label="JARVIS status: idle"></span>
         <span class="sr-only" id="statusSidebarLabel" aria-live="polite">Idle</span>
-        <span class="conn-text" id="connText">TRALIX backend</span>
+        <span class="conn-text" id="connText">JARVIS backend</span>
         <button type="button" class="icon-btn ghost tiny" id="btnConnInfo" aria-label="Connection details">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8.2v.1"/></svg>
         </button>
@@ -157,7 +157,7 @@
         </span>
         <button type="button" class="model-chip desktop-only" id="btnModel" aria-haspopup="dialog" aria-label="Choose model">
           <span class="tralix-status tiny" id="statusChip" data-state="idle" aria-hidden="true"></span>
-          <span class="chip-label" id="chipLabel">TRALIX Smart</span>
+          <span class="chip-label" id="chipLabel">JARVIS Smart</span>
           <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
         </button>
       </div>
@@ -375,7 +375,7 @@
         <div class="starter-grid" id="starterGrid">
           <button type="button" class="starter" data-starter="ask">
             <span class="st-icon" aria-hidden="true">◇</span>
-            <span class="st-title">Ask TRALIX</span>
+            <span class="st-title">Ask JARVIS</span>
             <span class="st-sub">Ask anything</span>
           </button>
           <button type="button" class="starter" data-starter="build">
@@ -436,14 +436,14 @@
       </div>
 
       <form class="composer" id="composer" autocomplete="off">
-        <label class="sr-only" for="composer-input">Message TRALIX</label>
+        <label class="sr-only" for="composer-input">Message JARVIS</label>
 
         <button type="button" class="icon-btn composer-btn" id="btnAttach" aria-label="Add attachment">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
 
         <textarea id="composer-input" name="message" rows="1"
-                  placeholder="Message TRALIX…"
+                  placeholder="Message JARVIS…"
                   enterkeyhint="send"
                   autocapitalize="sentences"
                   autocorrect="on"
@@ -711,7 +711,7 @@
             <option value="pt">Português</option>
             <option value="ar">العربية</option>
           </select>
-          <p class="hint">Controls how TRALIX replies and how dates are shown.</p>
+          <p class="hint">Controls how JARVIS replies and how dates are shown.</p>
         </div>
         <label class="toggle-row">
           <span><strong>Haptics</strong><small>Subtle vibration feedback on send and errors</small></span>
@@ -741,7 +741,7 @@
           <label for="personaInput">Custom instructions</label>
           <textarea id="personaInput" class="set-textarea" rows="4"
             placeholder="e.g. Call me Tralix. Be direct, skip pleasantries, explain trade-offs."></textarea>
-          <p class="hint">Used when personality is set to Custom. TRALIX's safety and honesty rules always apply.</p>
+          <p class="hint">Used when personality is set to Custom. JARVIS's safety and honesty rules always apply.</p>
         </div>
       </section>
 
@@ -749,7 +749,7 @@
       <section class="set-block" data-section="voice" hidden>
         <h3 class="set-h">Voice</h3>
         <label class="toggle-row">
-          <span><strong>Voice output</strong><small>Allow TRALIX to speak replies</small></span>
+          <span><strong>Voice output</strong><small>Allow JARVIS to speak replies</small></span>
           <input type="checkbox" id="setVoiceEnabled" class="switch" role="switch">
         </label>
         <label class="toggle-row">
@@ -778,7 +778,7 @@
       <section class="set-block" data-section="memory" hidden>
         <h3 class="set-h">Memory</h3>
         <label class="toggle-row">
-          <span><strong>Enable memory</strong><small>TRALIX can use saved facts in every chat</small></span>
+          <span><strong>Enable memory</strong><small>JARVIS can use saved facts in every chat</small></span>
           <input type="checkbox" id="setMemoryEnabled" class="switch" role="switch">
         </label>
         <label class="toggle-row">
@@ -793,7 +793,7 @@
       <!-- DATA -->
       <section class="set-block" data-section="data" hidden>
         <h3 class="set-h">Your data</h3>
-        <p class="set-p">Conversations, memories and settings live in this browser. Nothing is uploaded to TRALIX servers except the messages you send to generate a reply.</p>
+        <p class="set-p">Conversations, memories and settings live in this browser. Nothing is uploaded to JARVIS servers except the messages you send to generate a reply.</p>
         <div class="btn-row">
           <button type="button" class="btn-ghost wide" id="btnExport">Export data</button>
           <button type="button" class="btn-ghost wide" id="btnImport">Import data</button>
@@ -809,7 +809,7 @@
       <!-- ADVANCED -->
       <section class="set-block" data-section="advanced" hidden>
         <h3 class="set-h">API configuration</h3>
-        <p class="set-p">By default TRALIX talks to the TRALIX backend, which holds the OpenAI key on the server. The key is never present in this app.</p>
+        <p class="set-p">By default JARVIS talks to the JARVIS backend, which holds the OpenAI key on the server. The key is never present in this app.</p>
 
         <div class="field">
           <label for="advBase">Backend URL</label>
@@ -827,7 +827,7 @@
         <div class="field">
           <label for="advTransport">Where requests go</label>
           <select id="advTransport">
-            <option value="backend">TRALIX backend (recommended)</option>
+            <option value="backend">JARVIS backend (recommended)</option>
             <option value="local">This device only — my own provider key</option>
           </select>
           <p class="hint" id="advTransportHint"></p>
@@ -888,7 +888,7 @@
       </button>
     </div>
     <div class="sheet-body">
-      <p class="set-p">What TRALIX remembers about you. Say “remember that…” in a chat, or add it here.</p>
+      <p class="set-p">What JARVIS remembers about you. Say “remember that…” in a chat, or add it here.</p>
       <div class="mem-manager" id="memManagerSheet"></div>
     </div>
   </div>
@@ -944,7 +944,7 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="connectTitle">
     <div class="sheet-grip" aria-hidden="true"></div>
     <div class="sheet-head">
-      <h2 class="sheet-title" id="connectTitle">TRALIX backend</h2>
+      <h2 class="sheet-title" id="connectTitle">JARVIS backend</h2>
       <button type="button" class="icon-btn ghost" data-close="connectSheet" aria-label="Close">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
@@ -967,7 +967,7 @@
         <ol class="set-steps">
           <li>Push this repository to GitHub. The workflow in <code>.github/workflows/deploy-backend.yml</code> deploys <code>server/</code> for you.</li>
           <li>Add three repository secrets: <code>CLOUDFLARE_API_TOKEN</code>, <code>CLOUDFLARE_ACCOUNT_ID</code> and <code>OPENAI_API_KEY</code>.</li>
-          <li>Run the <strong>Deploy TRALIX backend</strong> workflow. It prints the worker URL.</li>
+          <li>Run the <strong>Deploy JARVIS backend</strong> workflow. It prints the worker URL.</li>
           <li>Put that URL in <code>backend.json</code> (<code>{"url": "https://…"}</code>) and push — or paste it above to use it on this device only.</li>
         </ol>
         <p class="hint">Prefer your own server? <code>OPENAI_API_KEY=… node server/node.js --static</code> serves the app and the API together. The key stays on the server either way — this frontend never receives it.</p>
@@ -1041,12 +1041,12 @@
 </div>
 
 <div class="update-bar" id="updateBar" hidden>
-  A new version of TRALIX is ready
+  A new version of JARVIS is ready
   <button type="button" id="btnReload">Reload</button>
 </div>
 
 <noscript>
-  <div class="noscript">TRALIX AI needs JavaScript to run. Please enable it and reload.</div>
+  <div class="noscript">JARVIS STUDIO needs JavaScript to run. Please enable it and reload.</div>
 </noscript>
 
 <script type="module" src="./assets/js/app.js"></script>

@@ -2,7 +2,10 @@
    api/chat.js — transport selection and request assembly.
 
    Chooses between:
-     backend (default) : TRALIX backend → OpenAI. Key lives server-side.
+     routed  (default when the backend serves /api/v2)
+                       : free-first routing across every configured provider.
+     legacy  backend   : /api/chat → OpenAI. Used only by deployments that do
+                         not serve /api/v2 yet.
      local   (advanced): user's own key, device-only storage.
 
    Nothing in the UI needs to know which one is in play — except Advanced
@@ -15,6 +18,7 @@ import { normaliseModelId, resolveLocal } from '../models.js';
 import { buildSystemPrompt } from '../personality.js';
 import * as Backend from './backend.js';
 import * as Local from './local.js';
+import * as V2 from './v2.js';
 
 /**
  * Which transport will be used for the next request.
@@ -27,10 +31,20 @@ export function activeTransport(settings) {
   return 'backend';
 }
 
+/**
+ * Does this deployment route across providers? The legacy health report says so
+ * (`jarvis.api` / `features.multiProviderRouting`), which the app already
+ * fetched at boot — so no extra round trip is needed here.
+ */
+export function routingAvailable() {
+  const report = Backend.cachedHealth?.();
+  return Boolean(report?.jarvis?.api || report?.features?.multiProviderRouting);
+}
+
 export function transportLabel(settings) {
   return activeTransport(settings) === 'local'
     ? `Local · ${Local.providerById(settings.advanced.localProvider).label}`
-    : 'TRALIX backend';
+    : 'JARVIS backend';
 }
 
 /** Build the message array sent to the model (trimmed history, roles normalised). */
@@ -70,9 +84,10 @@ export function buildInstructions({ settings, memoryText = '', hasWebSearch = fa
  * @param {string} opts.instructions
  * @param {AbortSignal} [opts.signal]
  * @param {(delta:string, full:string)=>void} [opts.onDelta]
+ * @param {(info:{provider:string, providerLabel:string, model:string, paid:boolean})=>void} [opts.onModel]
  * @returns {Promise<{text:string, model:string, usage:object|null, searchUsed:boolean}>}
  */
-export async function send({ settings, messages, instructions, signal, onDelta }) {
+export async function send({ settings, messages, instructions, signal, onDelta, onModel }) {
   if (!messages?.length) {
     throw new TralixError(ERROR_CODES.bad_request, { message: 'There is nothing to send.', retryable: false });
   }
@@ -93,6 +108,41 @@ export async function send({ settings, messages, instructions, signal, onDelta }
       signal,
       onDelta,
     });
+  }
+
+  if (routingAvailable()) {
+    try {
+      const routed = await V2.chat({
+        messages,
+        instructions,
+        task: 'chat',
+        // The tier the user picked ("tralix-smart") is a JARVIS tier; the
+        // router speaks the same names without the brand prefix.
+        tier: String(tier || '').replace(/^tralix-/, ''),
+        signal,
+        onDelta,
+        onModel,
+      });
+      return {
+        text: routed.text,
+        model: routed.model,
+        provider: routed.provider,
+        providerLabel: routed.providerLabel,
+        paid: Boolean(routed.paid),
+        usage: null,
+        searchUsed: false,
+        status: 'completed',
+      };
+    } catch (err) {
+      /*
+       * Only one reason is allowed to fall back: the deployment does not serve
+       * /api/v2 at all. Every routing outcome — "no eligible model", "paid
+       * usage not authorised", quota — is reported, never downgraded silently
+       * onto the legacy paid key.
+       */
+      const missingV2 = err?.status === 404 || err?.code === ERROR_CODES.not_found;
+      if (!missingV2) throw err;
+    }
   }
 
   return Backend.streamChat({
