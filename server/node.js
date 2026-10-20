@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import handler from './worker.js';
+import * as Store from './store.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -30,16 +31,89 @@ const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '0.0.0.0';
 const SERVE_STATIC = process.argv.includes('--static');
 
+/**
+ * Load ./server/.env (or ./.env) without a dependency. Real environment
+ * variables always win, so a hosting platform's dashboard remains the source
+ * of truth. `.env` is git-ignored and must never be committed.
+ */
+function loadDotEnv() {
+  for (const candidate of [path.join(here, '.env'), path.join(root, '.env')]) {
+    let text = '';
+    try { text = fs.readFileSync(candidate, 'utf8'); } catch { continue; }
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) continue;
+      const eq = line.indexOf('=');
+      if (eq === -1) continue;
+      const key = line.slice(0, eq).trim();
+      if (!/^[A-Z][A-Z0-9_]*$/i.test(key) || process.env[key] !== undefined) continue;
+      let value = line.slice(eq + 1).trim();
+      if (/^(['"]).*\1$/.test(value)) value = value.slice(1, -1);
+      process.env[key] = value;
+    }
+    console.log(`  loaded ${path.relative(root, candidate)}`);
+    break;
+  }
+}
+loadDotEnv();
+
+// Create the data directory before the first request so the startup banner can
+// report the real storage mode.
+await Store.init({ env: { JARVIS_DATA_DIR: process.env.JARVIS_DATA_DIR } }).catch(() => 'memory');
+
 const env = {
+  /* ---- legacy single-provider tier mapping (still supported) ---- */
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
   OPENAI_BASE_URL: process.env.OPENAI_BASE_URL || '',
-  TRALIX_ALLOWED_ORIGINS: process.env.TRALIX_ALLOWED_ORIGINS || '*',
+  TRALIX_ALLOWED_ORIGINS: process.env.TRALIX_ALLOWED_ORIGINS
+    || process.env.JARVIS_ALLOWED_ORIGINS || '*',
   TRALIX_ENABLE_WEB_SEARCH: process.env.TRALIX_ENABLE_WEB_SEARCH || 'false',
   TRALIX_MODEL_FAST: process.env.TRALIX_MODEL_FAST || '',
   TRALIX_MODEL_SMART: process.env.TRALIX_MODEL_SMART || '',
   TRALIX_MODEL_CODE: process.env.TRALIX_MODEL_CODE || '',
   TRALIX_MODEL_RESEARCH: process.env.TRALIX_MODEL_RESEARCH || '',
+
+  /* ---- JARVIS STUDIO: provider routing ---- */
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+  GEMINI_BASE_URL: process.env.GEMINI_BASE_URL || '',
+  GROQ_API_KEY: process.env.GROQ_API_KEY || '',
+  GROQ_BASE_URL: process.env.GROQ_BASE_URL || '',
+  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
+  OPENROUTER_BASE_URL: process.env.OPENROUTER_BASE_URL || '',
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
+  ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL || '',
+  MISTRAL_API_KEY: process.env.MISTRAL_API_KEY || '',
+  MISTRAL_BASE_URL: process.env.MISTRAL_BASE_URL || '',
+  OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL || '',
+
+  /* ---- JARVIS STUDIO: GitHub ---- */
+  GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
+  GITHUB_APP_ID: process.env.GITHUB_APP_ID || '',
+  GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY || '',
+  GITHUB_INSTALLATION_ID: process.env.GITHUB_INSTALLATION_ID || '',
+  GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID || '',
+  GITHUB_OAUTH_CLIENT_SECRET: process.env.GITHUB_OAUTH_CLIENT_SECRET || '',
+  GITHUB_OAUTH_REDIRECT_URI: process.env.GITHUB_OAUTH_REDIRECT_URI || '',
+
+  /* ---- JARVIS STUDIO: voice ---- */
+  FISH_AUDIO_API_KEY: process.env.FISH_AUDIO_API_KEY || '',
+  FISH_AUDIO_MODEL: process.env.FISH_AUDIO_MODEL || '',
+  FISH_AUDIO_REFERENCE_ID: process.env.FISH_AUDIO_REFERENCE_ID || '',
+
+  /* ---- JARVIS STUDIO: cost, security, storage, sandbox ---- */
+  JARVIS_PAID_FALLBACK: process.env.JARVIS_PAID_FALLBACK || 'false',
+  JARVIS_MONTHLY_LIMIT_USD: process.env.JARVIS_MONTHLY_LIMIT_USD || '',
+  JARVIS_WRITE_TOKEN: process.env.JARVIS_WRITE_TOKEN || '',
+  JARVIS_DATA_DIR: process.env.JARVIS_DATA_DIR || '',
+  JARVIS_SANDBOX_DRIVER: process.env.JARVIS_SANDBOX_DRIVER || '',
+  JARVIS_SANDBOX_NETWORK: process.env.JARVIS_SANDBOX_NETWORK || '',
 };
+
+// The sandbox runner reads these from process.env, so make sure the values the
+// server was started with are present even when only `env` was populated.
+for (const key of ['JARVIS_SANDBOX_DRIVER', 'JARVIS_SANDBOX_NETWORK', 'JARVIS_DATA_DIR']) {
+  if (!process.env[key] && env[key]) process.env[key] = env[key];
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -127,7 +201,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`TRALIX backend listening on http://${HOST}:${PORT}`);
-  console.log(`  key configured: ${env.OPENAI_API_KEY ? 'yes' : 'NO — set OPENAI_API_KEY'}`);
+  const has = (value) => (value ? 'yes' : 'no');
+  console.log(`JARVIS STUDIO backend listening on http://${HOST}:${PORT}`);
+  console.log(`  data directory      : ${path.resolve(process.cwd(), process.env.JARVIS_DATA_DIR || './data')} (${Store.storageMode()})`);
+  console.log(`  legacy OpenAI tier  : ${has(env.OPENAI_API_KEY)}`);
+  console.log(`  free-tier providers : ${['GEMINI_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY']
+    .filter(k => env[k]).map(k => k.replace('_API_KEY', '')).join(', ') || 'none configured'}`);
+  console.log(`  paid fallback       : ${env.JARVIS_PAID_FALLBACK === 'true' ? 'AUTHORISED' : 'off (free-first)'}`);
+  console.log(`  GitHub              : ${has(env.GITHUB_TOKEN || (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY))}`);
+  console.log(`  Fish Audio voice    : ${has(env.FISH_AUDIO_API_KEY)}`);
+  console.log(`  write token         : ${has(env.JARVIS_WRITE_TOKEN)}`);
   if (SERVE_STATIC) console.log(`  serving the app from ${root}`);
 });

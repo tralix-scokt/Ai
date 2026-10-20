@@ -8,3 +8,7 @@ node_modules
 .env.*.local
 *.log
 .wrangler/
+
+# JARVIS STUDIO — server-side state (settings, task history, stored keys)
+data/
+server/.env

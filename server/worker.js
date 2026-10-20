@@ -29,12 +29,29 @@
      OPENAI_BASE_URL       optional, for a gateway/proxy
    ========================================================================== */
 
+import { handle as handleV2 } from './routes.js';
+import * as Store from './store.js';
+
 const DEFAULTS = {
   fast: 'gpt-5-mini',
   smart: 'gpt-5',
   code: 'gpt-5-codex',
   research: 'gpt-5',
 };
+
+/**
+ * The JARVIS STUDIO data directory (settings, task history, stored keys) is
+ * created once per process. On a serverless runtime without a filesystem the
+ * store degrades to memory and says so in /api/v2/health.
+ */
+let storeReady = null;
+function ensureStore(env) {
+  if (!storeReady) storeReady = Store.init({ env }).catch((err) => {
+    console.warn('[jarvis] store init failed', String(err?.message || err));
+    return 'memory';
+  });
+  return storeReady;
+}
 
 const TIERS = ['tralix-fast', 'tralix-smart', 'tralix-code', 'tralix-research'];
 
@@ -538,7 +555,16 @@ async function handleHealth(request, env) {
     models: modelReport(env, probe),
     version: 1,
     tools: hasSearch ? ['web_search'] : [],
-    features: { webSearch: hasSearch, attachments: false, codeExecution: false },
+    features: {
+      webSearch: hasSearch,
+      attachments: false,
+      // Reported only when the capability is actually configured, never assumed.
+      codeExecution: Boolean(globalThis.process?.versions?.node),
+      github: Boolean(env.GITHUB_TOKEN || env.GITHUB_APP_ID),
+      voice: Boolean(env.FISH_AUDIO_API_KEY),
+      multiProviderRouting: true,
+    },
+    jarvis: { api: '/api/v2', studio: true },
     rateLimit: RATE_LIMIT,
     checkedAt: probe.checkedAt,
     latencyMs: probe.latencyMs,
@@ -571,6 +597,21 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(request, env) });
+    }
+
+    // JARVIS STUDIO API (providers, routing, GitHub, tasks, sandbox, voice).
+    if (/^\/api\/v2(\/|$)/.test(url.pathname)) {
+      await ensureStore(env);
+      try {
+        const handled = await handleV2(request, env);
+        if (handled) return handled;
+      } catch (err) {
+        console.error('[jarvis] v2 route failed', String(err?.message || err));
+        return new Response(JSON.stringify({ error: { code: 'unknown', message: 'Unexpected backend error.' } }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders(request, env) },
+        });
+      }
     }
 
     // Accept both /api/chat (as the frontend calls it) and /chat (worker root).
