@@ -16,7 +16,10 @@
 import { errorPayload, CODES, createLimiter, redact } from './lib/http.js';
 import * as Store from './store.js';
 
-const API = 'https://api.fish.audio/v1/tts';
+const DEFAULT_API = 'https://api.fish.audio/v1/tts';
+/** Overridable so a proxy, a self-hosted gateway or the test suite can point
+ *  somewhere else; the default is the real service. */
+const apiUrl = (env) => String(env?.FISH_AUDIO_BASE_URL || DEFAULT_API).trim() || DEFAULT_API;
 const MAX_CHARS = 1200;
 const limiter = createLimiter({ windowMs: 60_000, max: 20 });
 
@@ -103,7 +106,7 @@ export async function synthesize(env, request, body = {}, clientKey = 'anonymous
 
   let upstream;
   try {
-    upstream = await fetch(API, {
+    upstream = await fetch(apiUrl(env), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${cfg.key}`,
