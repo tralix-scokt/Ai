@@ -223,7 +223,9 @@ t('GitHub is reported as not connected', /Not connected/.test(text('#statGrid'))
 t('the sandbox says which isolation it has', /Process sandbox only/.test(text('#statGrid')));
 t('voice is reported as off', /Spoken replies off/.test(text('#statGrid')));
 t('the setup checklist is shown', !$('#setupCard').hidden);
-t('the checklist asks for GitHub and a provider', /provider/i.test(text('#setupList')) && /GitHub/i.test(text('#setupList')));
+t('the checklist asks for what is actually missing', /GitHub/.test(text('#setupList')), text('#setupList').slice(0, 120));
+t('and does not ask again for a provider that already works',
+  !/Add at least one AI provider key/.test(text('#setupList')));
 t('recent tasks has an honest empty state', /No coding tasks yet/.test(text('#recentTasks')));
 t('recent conversations has its own empty state', /No conversations yet/.test(text('#recentChats')));
 
@@ -249,7 +251,9 @@ t('the environment report is rendered', $$('#envList tr, #envList li, #envList .
   text('#envList').slice(0, 80));
 t('missing variables are named', /GROQ_API_KEY|GITHUB_TOKEN/.test(text('#envList')));
 t('the sandbox report is rendered', /process|docker/i.test(text('#sandboxReport')));
-t('the voice report is rendered', /Fish Audio|voice/i.test(text('#voiceReport')));
+t('the voice report separates speech out from speech in',
+  /Spoken replies/.test(text('#voiceReport')) && /Speech recognition/.test(text('#voiceReport')),
+  text('#voiceReport').slice(0, 140));
 t('the classic advanced sheet is still reachable', Boolean($('#btnOpenClassicSettings')));
 
 /* ------------------------------- Projects --------------------------------- */
@@ -292,12 +296,14 @@ t('returning to idle is possible', $('#orbHome')?.dataset.state === 'idle');
 /* ---------------------------- backend unreachable -------------------------- */
 console.log('\n— honest failure state —');
 reachable = false;
-const { default: _ } = { default: null };
-await (await import('../assets/js/views/home.js')) && null;
-const homeViewRefresh = null;
-window.dispatchEvent(new window.CustomEvent('jarvis:github-connected'));
-await flush(120);
-t('nothing crashes when the backend disappears', problems.length === 0, problems.join(' | '));
+await go('home');
+await flush(200);
+t('an unreachable backend is reported as unreachable', /Unreachable/i.test(text('#statGrid')),
+  text('#statGrid').slice(0, 140));
+t('the failure offers a retry', Boolean($('#statGrid [data-retry]')));
+t('the greeting stops implying the workspace is ready', /Backend unreachable/i.test(text('#homeGreeting')),
+  text('#homeGreeting'));
+t('no fake numbers survive the failure', !/ready/i.test(text('#statGrid')));
 
 console.log('\n— errors during the run —');
 t('no uncaught errors or rejections', problems.length === 0, problems.join(' | '));

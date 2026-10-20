@@ -14,11 +14,12 @@
     "test:diff": "node tests/diff.test.mjs",
     "test:server": "node tests/backend.test.mjs && node tests/routing.test.mjs && node tests/runner.test.mjs && node tests/tasks.test.mjs && node tests/diff.test.mjs",
     "check": "node tools/check.mjs",
-    "verify": "npm run check && npm run test && npm run test:diff && npm run test:server && npm run test:dom",
+    "verify": "npm run check && npm run test && npm run test:server && npm run test:dom && npm run test:studio",
     "serve": "node server/node.js --static",
     "backend": "node server/node.js",
     "fake:openai": "node tests/fake-openai.mjs 8799",
-    "fake:gemini": "node tests/fake-gemini.mjs 8801"
+    "fake:gemini": "node tests/fake-gemini.mjs 8801",
+    "test:studio": "node tests/studio.test.mjs"
   },
   "engines": {
     "node": ">=18"
