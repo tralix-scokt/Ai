@@ -235,10 +235,20 @@ export async function run({
   const warnings = [];
 
   let workDir = cwd;
+  // A directory we create ourselves is ours to remove again — an empty temp
+  // directory per call would otherwise pile up for as long as the server runs.
+  let ownDir = null;
   if (!workDir || !fs.existsSync(workDir)) {
     workDir = fs.mkdtempSync(`${os.tmpdir()}/jarvis-run-`);
-    warnings.push('No working directory was supplied; an empty temporary directory was used.');
+    ownDir = workDir;
+    warnings.push('No working directory was supplied; an empty temporary directory was used and removed afterwards.');
   }
+
+  const removeOwnDir = () => {
+    if (!ownDir) return;
+    try { fs.rmSync(ownDir, { recursive: true, force: true }); } catch { /* best effort */ }
+    ownDir = null;
+  };
 
   let spawnBin = check.bin;
   let spawnArgs = check.args;
@@ -314,6 +324,7 @@ export async function run({
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      removeOwnDir();
       resolve({
         ok: payload.exitCode === 0 && !payload.timedOut,
         timedOut: Boolean(payload.timedOut),

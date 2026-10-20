@@ -153,6 +153,7 @@ for the annotated file.
 | `ANTHROPIC_API_KEY` | optional | Anthropic Claude (paid) |
 | `MISTRAL_API_KEY` | optional | Mistral (paid) |
 | `OLLAMA_BASE_URL` | optional | A local Ollama instance (free, no key) |
+| `<PROVIDER>_BASE_URL` | optional | Gateway/proxy override per provider: `GEMINI_BASE_URL`, `GROQ_BASE_URL`, `OPENROUTER_BASE_URL`, `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, `MISTRAL_BASE_URL` |
 | `GITHUB_TOKEN` | for repo work | Fine-grained PAT, server-side |
 | `GITHUB_APP_ID` · `GITHUB_APP_PRIVATE_KEY` · `GITHUB_APP_INSTALLATION_ID` | optional | GitHub App fallback |
 | `GITHUB_OAUTH_CLIENT_ID` · `GITHUB_OAUTH_CLIENT_SECRET` · `GITHUB_OAUTH_REDIRECT_URI` | optional | Per-user sign-in |
@@ -160,12 +161,16 @@ for the annotated file.
 | `FISH_AUDIO_MODEL` · `FISH_AUDIO_REFERENCE_ID` · `FISH_AUDIO_BASE_URL` | optional | Voice model, voice id, proxy override |
 | `JARVIS_WRITE_TOKEN` | recommended in production | Shared secret required for every mutating API call |
 | `JARVIS_DATA_DIR` | optional | Where settings, keys and task history are stored |
-| `JARVIS_SANDBOX_DRIVER` · `JARVIS_SANDBOX_NETWORK` · `JARVIS_SANDBOX_TIMEOUT_MS` · `JARVIS_SANDBOX_MEMORY_MB` | optional | Execution limits |
-| `TRALIX_ALLOWED_ORIGINS` | optional | CORS allowlist (default `*`) |
+| `JARVIS_PAID_FALLBACK` · `JARVIS_MONTHLY_LIMIT_USD` | optional | The starting routing policy: paid fallback off and a ceiling of `0` unless you set them (the same two fields are editable in Settings → AI Models) |
+| `JARVIS_SANDBOX_DRIVER` · `JARVIS_SANDBOX_NETWORK` | optional | `process` or `docker`, and whether the sandbox may reach the network (`off` by default) |
+| `JARVIS_ALLOWED_ORIGINS` | optional | The same CORS allowlist under the new name; `TRALIX_ALLOWED_ORIGINS` still works |
 | `TRALIX_MODEL_FAST` · `_SMART` · `_CODE` · `_RESEARCH` | optional | Override the tier → model mapping |
 | `TRALIX_ENABLE_WEB_SEARCH` | optional | Enables the OpenAI web-search tool and flips the capability in the UI |
-| `OPENAI_BASE_URL` | optional | Gateway/proxy override |
 | `PORT` | optional | Node adapter port (default 8787) |
+
+Sandbox **time and memory limits** (`JARVIS_SANDBOX_TIMEOUT_MS`, `JARVIS_SANDBOX_MEMORY_MB`)
+are runtime *settings*, not environment variables: change them in Settings → Execution, or
+through `PATCH /api/v2/settings`.
 
 ---
 
@@ -234,7 +239,7 @@ Diagnostics always reports which one is in use.
 ```bash
 npm run check        # syntax, JSON, asset refs, SW shell, secret scan, DOM contract
 npm test             # 121 logic tests (markdown, memory, migration, tools, scroll…)
-npm run test:server  # 286 server tests: backend, routing, runner, tasks, voice, diff
+npm run test:server  # 289 server tests: backend, routing, runner, tasks, voice, diff
 npm run test:dom     # 131 integration checks (jsdom): boots the real app
 npm run test:studio  # 51 workspace checks (jsdom): areas, honest states, task rules
 npm run verify       # all of the above

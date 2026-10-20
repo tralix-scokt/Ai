@@ -86,6 +86,21 @@ const ENV_REPORT = [
   { name: 'JARVIS_SANDBOX_DRIVER', purpose: '"process" (default) or "docker".', secret: false },
   { name: 'JARVIS_SANDBOX_NETWORK', purpose: '"off" (default) or "on" for checks that must install deps.', secret: false },
   { name: 'TRALIX_ALLOWED_ORIGINS', purpose: 'CORS allow-list for the API.', secret: false },
+  { name: 'JARVIS_ALLOWED_ORIGINS', purpose: 'The same CORS allow-list under the new name.', secret: false },
+  { name: 'TRALIX_ENABLE_WEB_SEARCH', purpose: '"true" enables the OpenAI web-search tool.', secret: false },
+  { name: 'TRALIX_MODEL_FAST', purpose: 'Override the model behind the "fast" tier.', secret: false },
+  { name: 'TRALIX_MODEL_SMART', purpose: 'Override the model behind the "smart" tier (the default).', secret: false },
+  { name: 'TRALIX_MODEL_CODE', purpose: 'Override the model behind the "code" tier.', secret: false },
+  { name: 'TRALIX_MODEL_RESEARCH', purpose: 'Override the model behind the "research" tier.', secret: false },
+  { name: 'OLLAMA_BASE_URL', purpose: 'A local Ollama instance (free, no key).', secret: false },
+  { name: 'FISH_AUDIO_BASE_URL', purpose: 'Override the Fish Audio endpoint (proxy or self-hosted gateway).', secret: false },
+  { name: 'OPENAI_BASE_URL', purpose: 'Gateway/proxy override for OpenAI.', secret: false },
+  { name: 'GEMINI_BASE_URL', purpose: 'Gateway/proxy override for Gemini.', secret: false },
+  { name: 'GROQ_BASE_URL', purpose: 'Gateway/proxy override for Groq.', secret: false },
+  { name: 'OPENROUTER_BASE_URL', purpose: 'Gateway/proxy override for OpenRouter.', secret: false },
+  { name: 'ANTHROPIC_BASE_URL', purpose: 'Gateway/proxy override for Anthropic.', secret: false },
+  { name: 'MISTRAL_BASE_URL', purpose: 'Gateway/proxy override for Mistral.', secret: false },
+  { name: 'PORT', purpose: 'Port for the Node adapter (default 8787).', secret: false },
 ];
 
 function envReport(env) {

@@ -148,7 +148,7 @@ Run in this order, last run all green:
 ```
 npm run check        133/133 checks
 npm test             121 passed, 0 failed      (logic)
-npm run test:server   93 backend · 54 routing · 28 runner · 57 tasks · 39 voice · 15 diff
+npm run test:server   93 backend · 54 routing · 31 runner · 57 tasks · 39 voice · 15 diff
 npm run test:dom     131 passed, 0 failed      (jsdom: boots the real app)
 npm run test:studio   51 passed, 0 failed      (jsdom: the workspace layer)
 ```

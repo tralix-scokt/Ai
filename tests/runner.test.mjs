@@ -137,6 +137,27 @@ group('the runner reports its own limits honestly');
   console.log(`    (host: ${caps.platform || 'unknown'} · prlimit=${caps.wrappers.prlimit} · unshare=${caps.wrappers.unshare} · docker=${caps.wrappers.docker})`);
 }
 
+/* ===================== temporary directories are cleaned up =============== */
+group('a directory the runner creates is a directory the runner removes');
+
+{
+  const tmp = os.tmpdir();
+  const before = (await fs.readdir(tmp)).filter((name) => name.startsWith('jarvis-run-'));
+
+  // The /api/v2/sandbox/run route calls the runner without a working directory,
+  // which is exactly the case where an empty temp directory could be left behind.
+  const result = await run({ cwd: '', command: 'node', args: ['--check', goodFile] });
+
+  t('a run without a working directory still works', result.ok === true, result.stderr.slice(0, 120));
+  t('it says an empty temporary directory was used',
+    result.isolation?.warnings?.some(w => /temporary directory/i.test(w)) === true,
+    JSON.stringify(result.isolation?.warnings || []));
+
+  const after = (await fs.readdir(tmp)).filter((name) => name.startsWith('jarvis-run-'));
+  t('no temporary directory is left behind', after.length === before.length,
+    `${before.length} → ${after.length}`);
+}
+
 /* ================================ cleanup ================================ */
 await fs.rm(workspace, { recursive: true, force: true });
 
