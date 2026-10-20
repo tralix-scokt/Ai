@@ -202,8 +202,8 @@ const lastChatRequest = () => chatRequests().at(-1);
 
 t('boot splash is removed', !$('#boot'));
 t('app is revealed', $('#app') && !$('#app').hidden);
-t('identity is TRALIX AI', $('.brand-text strong').textContent.trim() === 'TRALIX AI');
-t('subtitle present', $('.brand-text small').textContent.includes('Intelligent AI Assistant'));
+t('identity is JARVIS STUDIO', $('.brand-text strong').textContent.trim() === 'JARVIS STUDIO');
+t('subtitle present', $('.brand-text small').textContent.includes('AI Coding Workspace'));
 t('welcome screen asks what to do', $('#welcomeQuestion').textContent.includes('What can I help you accomplish?'));
 t('starter cards rendered', $$('#starterGrid .starter').length === 5, String($$('#starterGrid .starter').length));
 t('no vendor branding in the product chrome', (() => {
@@ -310,8 +310,17 @@ t('follow-up is not rendered as a user message',
 
 console.log('\n— sheets, drawer and scroll lock —');
 const lockCount = async () => (await import('../assets/js/scrolling.js')).scrollLockCount();
+const { openSheet } = await import('../assets/js/ui/sheets.js');
 
+// Settings is a workspace area of its own now. The classic sheet (advanced
+// provider/voice options) is opened from that area, so both paths are checked.
 $('#btnSettings').dispatchEvent(new window.Event('click', { bubbles: true }));
+await flush(40);
+t('settings button opens the Settings area',
+  !$('#view-settings').hidden && $('#viewTitle').textContent === 'Settings');
+t('the Settings area offers the classic advanced sheet', Boolean($('#btnOpenClassicSettings')));
+
+openSheet('settingsSheet');
 await flush(40);
 t('settings sheet opens', !$('#settingsSheet').hidden);
 t('scroll lock engaged while open', (await lockCount()) > 0, String(await lockCount()));
@@ -379,7 +388,7 @@ t('no stylesheet rule locks the document body',
   'body { overflow: hidden } found in app.css');
 
 // Open and close a sheet as well: the same guarantee must hold for both layers.
-$('#btnSettings').dispatchEvent(new window.Event('click', { bubbles: true }));
+openSheet('settingsSheet');
 await flush(60);
 t('a sheet locks scrolling while it is open', document.body.style.overflow === 'hidden',
   JSON.stringify(document.body.style.overflow));
@@ -389,7 +398,7 @@ t('body scrolling is restored after a sheet closes', document.body.style.overflo
   JSON.stringify(document.body.style.overflow));
 
 // Nesting: two overlays open, one closes — the page stays locked until the last.
-$('#btnSettings').dispatchEvent(new window.Event('click', { bubbles: true }));
+openSheet('settingsSheet');
 await flush(60);
 $('#btnMemory').dispatchEvent(new window.Event('click', { bubbles: true }));
 await flush(80);

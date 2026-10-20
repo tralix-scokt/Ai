@@ -19,6 +19,12 @@ export const ERROR_CODES = {
   aborted: 'aborted',
   unsupported: 'unsupported',
   unknown: 'unknown',
+  /* JARVIS STUDIO routing */
+  no_eligible_model: 'no_eligible_model',
+  paid_blocked: 'paid_blocked',
+  quota_exceeded: 'quota_exceeded',
+  not_found: 'not_found',
+  forbidden: 'forbidden',
 };
 
 const MESSAGES = {
@@ -34,11 +40,17 @@ const MESSAGES = {
   [ERROR_CODES.aborted]: 'Stopped.',
   [ERROR_CODES.unsupported]: 'That feature is not available yet.',
   [ERROR_CODES.unknown]: 'Something went wrong. Please try again.',
+  [ERROR_CODES.no_eligible_model]: 'No AI model is available. Configure a provider in Settings → AI Models.',
+  [ERROR_CODES.paid_blocked]: 'No free model is available and paid usage is not authorised.',
+  [ERROR_CODES.quota_exceeded]: 'This provider has no quota left on its current plan.',
+  [ERROR_CODES.not_found]: 'That could not be found.',
+  [ERROR_CODES.forbidden]: 'The server refused that action.',
 };
 
 const RETRYABLE = new Set([
   ERROR_CODES.network, ERROR_CODES.timeout, ERROR_CODES.rate_limit,
   ERROR_CODES.provider_unavailable, ERROR_CODES.unknown,
+  ERROR_CODES.quota_exceeded, ERROR_CODES.not_found,
 ]);
 
 export class TralixError extends Error {
@@ -108,5 +120,10 @@ export function errorLabel(code) {
     [ERROR_CODES.aborted]: 'Stopped',
     [ERROR_CODES.unsupported]: 'Unsupported',
     [ERROR_CODES.unknown]: 'Error',
+    [ERROR_CODES.no_eligible_model]: 'No model available',
+    [ERROR_CODES.paid_blocked]: 'Paid usage blocked',
+    [ERROR_CODES.quota_exceeded]: 'Quota exhausted',
+    [ERROR_CODES.not_found]: 'Not found',
+    [ERROR_CODES.forbidden]: 'Refused',
   }[code] || 'Error';
 }

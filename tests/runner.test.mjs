@@ -92,7 +92,7 @@ group('the executed code cannot see the server secrets');
 
 {
   process.env.JARVIS_CANARY_SECRET = 'canary-value-must-not-leak';
-  process.env.OPENAI_API_KEY = 'sk-canary-key-not-real';
+  process.env.OPENAI_API_KEY = 'sk-test-key-not-real';   // obviously fake — see tools/check.mjs
 
   const probeFile = path.join(workspace, 'env-dump.js');
   await fs.writeFile(probeFile, `
@@ -105,7 +105,7 @@ group('the executed code cannot see the server secrets');
 
   t('no secret-shaped variable reaches the child', leaked.length === 0, JSON.stringify(leaked));
   t('the canary never appears in the captured output',
-    !result.stdout.includes('canary-value-must-not-leak') && !result.stderr.includes('sk-canary-key-not-real'));
+    !result.stdout.includes('canary-value-must-not-leak') && !result.stderr.includes('sk-test-key-not-real'));
 
   delete process.env.JARVIS_CANARY_SECRET;
   delete process.env.OPENAI_API_KEY;

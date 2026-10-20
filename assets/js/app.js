@@ -27,6 +27,15 @@ import { createSettings } from './ui/settings.js';
 import { createComposer } from './ui/composer.js';
 import { createChatController } from './ui/chat.js';
 
+import { createNav } from './ui/nav.js';
+import { bindOrbs, setOrbState, onOrbState } from './ui/orb.js';
+import { createHomeView } from './views/home.js';
+import { createProjectsView } from './views/projects.js';
+import { createModelsView } from './views/models.js';
+import { createSettingsView } from './views/settings.js';
+import { createTaskPanel } from './views/tasks.js';
+import * as V2 from './api/v2.js';
+
 /* ================================= state ================================= */
 const state = {
   settings: Store.loadSettings(),
@@ -78,20 +87,20 @@ function persistChat() {
 /* ================================= voice ================================== */
 const listener = new Voice.Listener({
   onResult: (text) => {
-    setStatus('listening');
+    setStudioStatus('listening');
     $('#voiceLabel').textContent = text ? text : 'Listening…';
   },
   onError: (message) => {
     toast(message, { tone: 'error', ms: 4200 });
     setVoiceBar(null);
-    setStatus('idle');
+    setStudioStatus('idle');
   },
   onStart: () => {
     setVoiceBar({ state: 'listening', label: 'Listening…', hint: 'tap the mic again to stop' });
   },
   onEnd: (finalText) => {
     setVoiceBar(null);
-    setStatus('idle');
+    setStudioStatus('idle');
     composer.setRecording(false);
     if (finalText && finalText.trim().length > 1) {
       composer.setValue(finalText.trim(), { focus: false });
@@ -188,9 +197,9 @@ const sidebar = createSidebar({
   onOpenChat: (id) => chat.openChat(id),
   onNewChat: () => chat.newChat(),
   onOpenSearch: () => search.open(),
-  onOpenProjects: () => { projects.render(); openSheet('projectsSheet'); },
+  onOpenProjects: () => { projects.render(); },
   onOpenMemory: () => { memoryManagerSheet.refresh(); openSheet('memorySheet'); },
-  onOpenSettings: () => settingsUi.open('general'),
+  onOpenSettings: () => nav.go('settings'),
   onOpenConnect: () => openConnect(),
   onChatsChanged: () => { sidebar.render(); sidebar.refreshCounts(); },
   onOpenModel: () => modelPicker.open(),
@@ -205,7 +214,7 @@ const projects = createProjects({
 });
 
 const composer = createComposer({
-  onSubmit: (text) => chat.send(text),
+  onSubmit: (text) => handleSubmit(text),
   onStop: () => chat.stopStreaming(),
   onMic: () => toggleListening(),
   onAttach: () => openAttachments(),
@@ -231,16 +240,134 @@ const chat = createChatController({
   },
 });
 
+/* ============================ workspace layer ============================
+   Five areas share one shell. Views stay mounted, so a stream keeps running
+   while you read a diff, and each view refreshes its own data when shown.
+   ========================================================================== */
+
+const nav = createNav({
+  getSettings: () => state.settings,
+  saveSettings,
+  onChange: (view) => refreshView(view),
+});
+
+const home = createHomeView({
+  nav,
+  onOpenTask: (id) => { nav.go('assistant'); taskPanel.openTask(id); },
+});
+
+const projectsView = createProjectsView({
+  nav,
+  onOpenTask: (id) => { nav.go('assistant'); taskPanel.openTask(id); },
+});
+
+const modelsView = createModelsView({ nav });
+const settingsView = createSettingsView({ nav, settingsUi });
+
+const taskPanel = createTaskPanel({
+  nav,
+  onChanged: () => { home.refreshTasks(); projectsView.refreshRepoTasks(); },
+});
+
+function refreshView(view) {
+  switch (view) {
+    case 'home': home.refresh(); break;
+    case 'projects': projectsView.refresh(); break;
+    case 'models': modelsView.refresh(); break;
+    case 'settings': settingsView.refresh(); break;
+    case 'assistant':
+      if (window.matchMedia('(min-width: 900px)').matches) composer.focus();
+      break;
+    default: break;
+  }
+}
+
+/**
+ * A message is either a conversation turn or a coding task. The toggle in the
+ * composer decides — JARVIS never guesses and never silently edits a repo.
+ */
+async function handleSubmit(text) {
+  const taskMode = $('#taskMode')?.checked;
+  if (!taskMode) {
+    chat.send(text);
+    return;
+  }
+
+  const selection = projectsView.selection;
+  if (!selection.repo) {
+    toast('Choose a repository in Projects first', { tone: 'error', ms: 4200 });
+    nav.go('projects');
+    return;
+  }
+  await taskPanel.start({
+    prompt: text,
+    repo: selection.repo,
+    branch: selection.branch,
+    autonomy: state.settings.studio?.autonomy || '',
+  });
+}
+
+window.addEventListener('jarvis:focus-task', () => {
+  nav.go('assistant');
+  const toggle = $('#taskMode');
+  if (toggle) toggle.checked = true;
+  syncTaskLauncher();
+  composer.focus();
+});
+
+window.addEventListener('jarvis:open-chat', (event) => {
+  const id = event.detail?.id;
+  if (id) chat.openChat(id);
+});
+
+window.addEventListener('jarvis:github-connected', () => {
+  refreshView('projects');
+  refreshView('home');
+});
+
+/** Keep the coding-task hint honest about which repository will be used. */
+function syncTaskLauncher() {
+  const hint = $('#taskLauncherHint');
+  if (!hint) return;
+  const { repo, branch } = projectsView.selection;
+  hint.textContent = repo
+    ? `JARVIS will work on ${repo}${branch ? ` @ ${branch}` : ''}, on its own branch. Nothing is committed until you approve the diff.`
+    : 'No repository selected — open Projects and choose one first.';
+}
+
+$('#taskMode')?.addEventListener('change', syncTaskLauncher);
+
+/** The orb label follows the shared orb state. */
+onOrbState((value, label) => {
+  const text = $('#orbStateText');
+  if (text) text.textContent = label;
+});
+
 /* ============================== chrome bits ============================== */
 $('#btnModel')?.addEventListener('click', () => modelPicker.open());
-$('#btnNavModel')?.addEventListener('click', () => modelPicker.open());
 
 function updateModelChip() {
   const label = modelLabel(state.settings.model);
   const chip = $('#chipLabel');
   if (chip) chip.textContent = label;
-  const nav = $('#navModelLabel');
-  if (nav) nav.textContent = label;
+}
+
+/**
+ * One status for both indicator systems: the small ring in the rail and the
+ * orb. They can never disagree because they are set from the same call.
+ */
+const ORB_FOR_STATUS = {
+  idle: 'idle',
+  listening: 'listening',
+  thinking: 'thinking',
+  generating: 'thinking',
+  speaking: 'speaking',
+  error: 'error',
+};
+
+function setStudioStatus(status, opts = {}) {
+  setStatus(status, opts);
+  setOrbState(ORB_FOR_STATUS[status] || 'idle');
 }
 
 /**
@@ -466,11 +593,12 @@ for (const button of document.querySelectorAll('#starterGrid .starter')) {
 /* ============================== lifecycle ================================ */
 window.addEventListener('offline', () => {
   setError('You are offline');
+  setOrbState('offline');
   toast('You are offline — TRALIX will not be able to reply', { tone: 'error' });
 });
 
 window.addEventListener('online', () => {
-  setStatus('idle');
+  setStudioStatus('idle');
   refreshHealth({ force: true });          // the backend may be back with us
   toast('Back online', { tone: 'success' });
 });
@@ -520,6 +648,10 @@ async function init() {
   settingsUi.refresh?.();
   chat.render();
 
+  bindOrbs(document);
+  nav.restore();
+  syncTaskLauncher();
+
   composer.sync();
   composer.resize();
 
@@ -547,7 +679,10 @@ async function init() {
   setTimeout(async () => {
     await loadBackendConfig();
     updateConnText();
-    const health = await refreshHealth({ force: true });
+    const [health] = await Promise.all([
+      refreshHealth({ force: true }),
+      home.refresh().catch(() => null),
+    ]);
     modelPicker.render();
     settingsUi.refreshDebug?.();
     if (health.ok) Api.syncModelMapping().then(() => settingsUi.refresh?.());

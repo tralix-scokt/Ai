@@ -1,7 +1,7 @@
 /* ==========================================================================
-   sw.js — TRALIX AI service worker.
+   sw.js — JARVIS STUDIO service worker.
 
-   Cache-first for the app shell (so TRALIX opens instantly and shows its UI
+   Cache-first for the app shell (so JARVIS STUDIO opens instantly and shows its UI
    offline), revalidating quietly in the background. API calls are never cached:
    replies always come from the network.
 
@@ -9,13 +9,14 @@
    serving the previous build.
    ========================================================================== */
 
-const VERSION = 'tralix-v6';
-const CACHE_PREFIX = 'tralix-';
+const VERSION = 'jarvis-v8';
+const CACHE_PREFIX = 'jarvis-';
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
   './assets/app.css',
+  './assets/studio.css',
   './assets/js/app.js',
   './assets/js/config.js',
   './assets/js/errors.js',
@@ -33,6 +34,15 @@ const SHELL = [
   './assets/js/api/backend.js',
   './assets/js/api/local.js',
   './assets/js/api/chat.js',
+  './assets/js/api/v2.js',
+  './assets/js/diff.js',
+  './assets/js/ui/orb.js',
+  './assets/js/ui/nav.js',
+  './assets/js/views/home.js',
+  './assets/js/views/projects.js',
+  './assets/js/views/models.js',
+  './assets/js/views/settings.js',
+  './assets/js/views/tasks.js',
   './assets/js/ui/sheets.js',
   './assets/js/ui/feedback.js',
   './assets/js/ui/status.js',

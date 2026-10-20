@@ -2,28 +2,29 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<title>TRALIX AI — Intelligent AI Assistant</title>
-<meta name="description" content="TRALIX AI is a personal AI assistant with memory, voice and a secure OpenAI-powered backend.">
+<title>JARVIS STUDIO — AI Coding Workspace</title>
+<meta name="description" content="JARVIS STUDIO is an AI coding workspace: Free-first multi-model routing, GitHub repository tasks with human review, isolated checks and a voice-enabled assistant.">
 
 <!-- iPhone / PWA -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<meta name="theme-color" content="#0a0b0f" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#05070d" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="color-scheme" content="dark light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="TRALIX">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
 <meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 <link rel="stylesheet" href="./assets/app.css">
+<link rel="stylesheet" href="./assets/studio.css">
 
 <!-- Paint the shell colour before the stylesheet arrives: avoids a white flash on iOS -->
 <style>
-  html, body { margin: 0; background: #0a0b0f; color: #e8eaf0; }
+  html, body { margin: 0; background: #05070d; color: #e8eaf0; }
   #boot { display: flex; align-items: center; justify-content: center; height: 100vh; height: 100dvh;
           font: 500 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
           color: #6b7280; letter-spacing: .04em; }
@@ -33,7 +34,7 @@
 <body>
 <a class="skip-link" href="#composer-input">Skip to message box</a>
 
-<div id="boot" aria-hidden="true">TRALIX AI</div>
+<div id="boot" aria-hidden="true">JARVIS STUDIO</div>
 
 <!-- ============================ APP FRAME ============================ -->
 <div class="app" id="app" hidden>
@@ -43,14 +44,16 @@
     <div class="sidebar-head">
       <a class="brand" href="./index.html" id="brandHome">
         <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" focusable="false">
+          <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
             <circle cx="16" cy="16" r="12.5" class="ring"/>
-            <path class="tmark" d="M10 11.5h12M16 11.5V22"/>
+            <circle cx="16" cy="16" r="4.6" class="core"/>
+            <path class="arc" d="M16 3.5a12.5 12.5 0 0 1 10.8 6.2"/>
+            <path class="arc2" d="M16 28.5A12.5 12.5 0 0 1 5.2 22.3"/>
           </svg>
         </span>
         <span class="brand-text">
-          <strong>TRALIX AI</strong>
-          <small>Intelligent AI Assistant</small>
+          <strong>JARVIS STUDIO</strong>
+          <small>AI Coding Workspace</small>
         </span>
       </a>
       <button type="button" class="icon-btn ghost" id="btnSidebarCollapse" aria-label="Collapse sidebar" title="Collapse sidebar">
@@ -60,6 +63,30 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
+
+    <nav class="rail-nav" id="railNav" aria-label="Main areas">
+      <button type="button" class="rail-item" data-view="home" id="btnHome" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
+        <span>Home</span>
+      </button>
+      <button type="button" class="rail-item" data-view="projects" id="btnProjects">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h3.5l2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Projects</span>
+        <span class="nav-count" id="projectCount">0</span>
+      </button>
+      <button type="button" class="rail-item" data-view="assistant" id="btnAssistant" aria-current="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 3.5v2M12 18.5v2M4.9 7.5l1.7 1M17.4 15.5l1.7 1M4.9 16.5l1.7-1M17.4 8.5l1.7-1"/></svg>
+        <span>JARVIS Assistant</span>
+      </button>
+      <button type="button" class="rail-item" data-view="models" id="btnNavModels">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5l1.5 3.6 3.6 1.5-3.6 1.5L12 17.5l-1.5-3.9L6.9 12l3.6-1.5z"/><path d="M18.5 4.5v2M17.5 5.5h2M5.5 16.5v2M4.5 17.5h2"/></svg>
+        <span>AI Models</span>
+      </button>
+      <button type="button" class="rail-item" data-view="settings" id="btnSettings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.4M12 18.6V21M4.2 7.5l2 1.2M17.8 15.3l2 1.2M4.2 16.5l2-1.2M17.8 8.7l2-1.2"/></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
 
     <div class="sidebar-actions">
       <button type="button" class="btn-new" id="btnNewChat">
@@ -72,12 +99,6 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <span>Search chats</span>
         <kbd class="kbd desktop-only">⌘K</kbd>
-      </button>
-
-      <button type="button" class="nav-item" id="btnProjects">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h3.5l2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <span>Projects</span>
-        <span class="nav-count" id="projectCount">0</span>
       </button>
 
       <button type="button" class="nav-item" id="btnMemory">
@@ -93,15 +114,7 @@
     </div>
 
     <div class="sidebar-foot">
-      <button type="button" class="nav-item" id="btnNavModel" aria-haspopup="dialog">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5l1.5 3.6 3.6 1.5-3.6 1.5L12 17.5l-1.5-3.9L6.9 12l3.6-1.5z"/><path d="M18.5 4.5v2M17.5 5.5h2M5.5 16.5v2M4.5 17.5h2"/></svg>
-        <span id="navModelLabel">TRALIX Smart</span>
-      </button>
-
-      <button type="button" class="nav-item" id="btnSettings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.4M12 18.6V21M4.2 7.5l2 1.2M17.8 15.3l2 1.2M4.2 16.5l2-1.2M17.8 8.7l2-1.2"/></svg>
-        <span>Settings</span>
-      </button>
+      <div class="conn-row" id="connRowMini" hidden></div>
 
       <div class="conn-row" id="connRow">
         <span class="tralix-status" id="statusSidebar" data-state="idle" role="img" aria-label="TRALIX status: idle"></span>
@@ -137,9 +150,10 @@
       </button>
 
       <div class="topbar-center">
+        <span class="view-title" id="viewTitle">JARVIS Assistant</span>
         <span class="topbar-brand mobile-only">
           <span class="tralix-status tiny" id="statusTopbar" data-state="idle" aria-hidden="true"></span>
-          <span class="topbar-brand-text">TRALIX AI</span>
+          <span class="topbar-brand-text">JARVIS</span>
         </span>
         <button type="button" class="model-chip desktop-only" id="btnModel" aria-haspopup="dialog" aria-label="Choose model">
           <span class="tralix-status tiny" id="statusChip" data-state="idle" aria-hidden="true"></span>
@@ -158,18 +172,204 @@
       </div>
     </header>
 
+    <div class="workspace" id="workspace">
+      <section class="view" id="view-home" data-view="home" aria-label="Home">
+        <div class="view-scroll">
+          <div class="hero">
+            <div class="hero-orb">
+        <div class="orb" id="orbHome" data-state="idle" role="img" aria-label="JARVIS status: idle">
+          <span class="orb-halo" aria-hidden="true"></span>
+          <span class="orb-core" aria-hidden="true"></span>
+          <span class="orb-ring orb-ring-a" aria-hidden="true"></span>
+          <span class="orb-ring orb-ring-b" aria-hidden="true"></span>
+          <span class="orb-sweep" aria-hidden="true"></span>
+        </div></div>
+            <div class="hero-copy">
+              <p class="hero-eyebrow">JARVIS STUDIO</p>
+              <h1 class="hero-title" id="homeGreeting">Checking systems…</h1>
+              <p class="hero-sub" id="heroSub">Reading the real state of your providers, GitHub connection and execution sandbox.</p>
+              <div class="hero-actions">
+                <button type="button" class="btn-primary" id="btnHomeTask">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  New coding task
+                </button>
+                <button type="button" class="btn-ghost" id="btnHomeRepos">Connect a repository</button>
+                <button type="button" class="btn-ghost" id="btnHomeModels">Configure models</button>
+              </div>
+              <p class="hero-state" id="orbStateText" aria-live="polite">Idle</p>
+            </div>
+          </div>
+
+          <h2 class="section-title">System status</h2>
+          <div class="stat-grid" id="statGrid">
+            <div class="stat skeleton"></div>
+            <div class="stat skeleton"></div>
+            <div class="stat skeleton"></div>
+            <div class="stat skeleton"></div>
+          </div>
+
+          <div class="setup-card" id="setupCard" hidden>
+            <h2 class="section-title">Finish the setup</h2>
+            <ol class="setup-list" id="setupList"></ol>
+          </div>
+
+          <div class="home-columns">
+            <section class="panel">
+              <header class="panel-head">
+                <h2 class="section-title">Recent tasks</h2>
+                <button type="button" class="link-btn" id="btnAllTasks">View all</button>
+              </header>
+              <div class="mini-list" id="recentTasks"></div>
+            </section>
+            <section class="panel">
+              <header class="panel-head">
+                <h2 class="section-title">Recent conversations</h2>
+              </header>
+              <div class="mini-list" id="recentChats"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-projects" data-view="projects" aria-label="Projects">
+        <div class="view-scroll">
+          <section class="panel">
+            <header class="panel-head">
+              <h2 class="section-title">GitHub</h2>
+              <span class="badge" id="githubBadge">Checking…</span>
+            </header>
+            <p class="panel-note" id="githubNote">Reading your GitHub connection…</p>
+            <div class="inline-form" id="githubKeyForm">
+              <input type="password" id="githubTokenInput" placeholder="github_pat_… or ghp_…" autocomplete="off" spellcheck="false">
+              <button type="button" class="btn-ghost" id="btnGithubSaveKey">Save token</button>
+              <button type="button" class="btn-ghost" id="btnGithubOAuth">Sign in with GitHub</button>
+              <button type="button" class="btn-ghost" id="btnGithubRemoveKey" hidden>Remove</button>
+            </div>
+            <p class="hint">A fine-grained token limited to the repositories you choose, with <strong>Contents: Read and write</strong>, <strong>Metadata: Read-only</strong> and <strong>Pull requests: Read and write</strong>. JARVIS never pushes to the default branch and never merges a pull request.</p>
+          </section>
+
+          <div class="split">
+            <section class="panel">
+              <header class="panel-head">
+                <h2 class="section-title">Repositories</h2>
+                <button type="button" class="btn-ghost" id="btnRefreshRepos">Refresh</button>
+              </header>
+              <input type="search" id="repoFilter" class="filter-input" placeholder="Filter repositories" autocomplete="off">
+              <div class="repo-list" id="repoList"></div>
+            </section>
+
+            <section class="panel">
+              <header class="panel-head">
+                <h2 class="section-title">Repository</h2>
+                <span class="badge subtle" id="selectedRepoChip">No repository selected</span>
+              </header>
+              <label class="field compact">
+                <span>Branch</span>
+                <select id="branchSelect"></select>
+              </label>
+              <div class="tree" id="fileTree"></div>
+              <div class="file-view" id="fileViewer" hidden>
+                <div class="file-head">
+                  <span class="file-path" id="filePath"></span>
+                  <button type="button" class="icon-btn ghost tiny" id="btnCopyFile" aria-label="Copy file contents">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg>
+                  </button>
+                </div>
+                <pre class="file-body"><code id="fileCode"></code></pre>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h2 class="section-title">Task history</h2>
+              <button type="button" class="btn-ghost" id="btnOpenProjectsSheet">Project labels</button>
+            </header>
+            <div class="mini-list" id="repoTasks"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="view-models" data-view="models" aria-label="AI Models">
+        <div class="view-scroll">
+          <section class="panel">
+            <header class="panel-head">
+              <h2 class="section-title">Routing policy</h2>
+              <button type="button" class="btn-ghost" id="btnRefreshModels">Refresh</button>
+            </header>
+            <p class="panel-note">Free-first is the default. JARVIS will not call a paid provider unless you authorise it here and set a monthly ceiling.</p>
+            <div class="field-row">
+              <label class="field compact">
+                <span>Mode</span>
+                <select id="routingMode">
+                  <option value="free-first">Free-first (recommended)</option>
+                  <option value="free-only">Free only — never pay</option>
+                  <option value="balanced">Balanced — best model wins</option>
+                </select>
+              </label>
+              <label class="toggle-row">
+                <span><strong>Allow paid fallback</strong><small>Used only when no free model is eligible</small></span>
+                <input type="checkbox" id="paidFallback" class="switch" role="switch">
+              </label>
+              <label class="field compact">
+                <span>Monthly ceiling (USD)</span>
+                <input type="number" id="monthlyLimit" min="0" step="0.5" placeholder="5">
+              </label>
+            </div>
+            <div class="status-line" id="routingStatus" role="status"></div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h2 class="section-title">Providers</h2>
+              <span class="badge subtle" id="providersBadge"></span>
+            </header>
+            <div class="provider-grid" id="providerGrid"></div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h2 class="section-title">Usage this month</h2>
+              <span class="badge subtle" id="usagePeriod"></span>
+            </header>
+            <p class="panel-note">Only what providers actually report. Requests and tokens are counted when a provider returns them; money is shown only when the provider publishes a price. Nothing is estimated.</p>
+            <div class="usage-table" id="usageTable"></div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head"><h2 class="section-title">What JARVIS would use right now</h2></header>
+            <div class="routing-columns">
+              <div>
+                <div class="list-label">Eligible</div>
+                <div class="mini-list" id="eligibleList"></div>
+              </div>
+              <div>
+                <div class="list-label">Blocked, and why</div>
+                <div class="mini-list" id="blockedList"></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view is-active" id="view-assistant" data-view="assistant" aria-label="JARVIS Assistant">
+        <div class="assistant-grid">
+          <div class="assistant-main">
     <main class="chat" id="chatScroll" tabindex="-1">
 
       <!-- empty state -->
       <section class="welcome" id="welcome">
-        <div class="welcome-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" focusable="false">
-            <circle cx="16" cy="16" r="12.5" class="ring"/>
-            <path class="tmark" d="M10 11.5h12M16 11.5V22"/>
-          </svg>
+        <div class="welcome-orb">
+          <div class="orb orb-lg" id="orbAssistant" data-state="idle" role="img" aria-label="JARVIS status: idle">
+            <span class="orb-halo" aria-hidden="true"></span>
+            <span class="orb-core" aria-hidden="true"></span>
+            <span class="orb-ring orb-ring-a" aria-hidden="true"></span>
+            <span class="orb-ring orb-ring-b" aria-hidden="true"></span>
+            <span class="orb-sweep" aria-hidden="true"></span>
+          </div>
         </div>
-        <h1 class="welcome-title">TRALIX AI</h1>
-        <p class="welcome-tagline">Intelligent AI Assistant</p>
+        <h1 class="welcome-title">JARVIS STUDIO</h1>
+        <p class="welcome-tagline">AI Coding Workspace</p>
         <p class="welcome-question" id="welcomeQuestion">What can I help you accomplish?</p>
 
         <div class="starter-grid" id="starterGrid">
@@ -216,6 +416,17 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
     </button>
 
+    <!-- --------------------------- TASK LAUNCHER ---------------------------- -->
+    <div class="task-launcher" id="taskLauncher">
+      <label class="toggle-row compact">
+        <span>
+          <strong>Coding task</strong>
+          <small id="taskLauncherHint">Send this message to the selected repository as a code change instead of a chat message.</small>
+        </span>
+        <input type="checkbox" id="taskMode" class="switch" role="switch">
+      </label>
+    </div>
+
     <!-- ------------------------------ COMPOSER ------------------------------ -->
     <div class="composer-wrap" id="composerWrap">
       <div class="voice-state" id="voiceState" hidden aria-live="polite">
@@ -257,9 +468,172 @@
         </div>
       </form>
 
-      <p class="composer-foot" id="composer-foot">TRALIX can make mistakes. Verify important information.</p>
+      <p class="composer-foot" id="composer-foot">JARVIS can make mistakes. Review every diff before you commit.</p>
+    </div>
+          </div>
+
+          <aside class="task-panel" id="taskPanel" hidden aria-label="Coding task">
+            <header class="task-head">
+              <div>
+                <p class="task-eyebrow">Coding task</p>
+                <h2 class="task-title" id="taskTitle">No active task</h2>
+              </div>
+              <button type="button" class="icon-btn ghost" id="btnCloseTask" aria-label="Hide task panel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </header>
+            <div class="task-body" id="taskBody">
+              <p class="hint">Describe a coding task in the composer — for example “add input validation to the signup form” — and JARVIS will inspect the selected repository, plan the change and show you the diff before anything is committed.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-settings" data-view="settings" aria-label="Settings">
+        <div class="view-scroll">
+          <section class="panel">
+            <header class="panel-head"><h2 class="section-title">GitHub</h2></header>
+            <div class="mini-list" id="settingsGithub"></div>
+            <p class="hint">Repository selection lives in <strong>Projects</strong>. JARVIS creates an isolated branch per task, commits only after you approve, and never merges.</p>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h2 class="section-title">Task execution</h2>
+              <button type="button" class="btn-ghost" id="btnSaveTasks">Save</button>
+            </header>
+            <label class="field compact">
+              <span>Autonomy</span>
+              <select id="setAutonomy">
+                <option value="review-plan">Stop after the plan for approval</option>
+                <option value="review-changes">Edit and test, then wait for review</option>
+                <option value="full">Edit, test and commit without asking</option>
+              </select>
+            </label>
+            <label class="field compact">
+              <span>Branch prefix</span>
+              <input type="text" id="setBranchPrefix" placeholder="jarvis/">
+            </label>
+            <label class="toggle-row">
+              <span><strong>Run checks</strong><small>Syntax checks always run; project test scripts need network enabled below</small></span>
+              <input type="checkbox" id="setRunChecks" class="switch" role="switch">
+            </label>
+            <label class="field compact">
+              <span>Repair attempts when tests fail</span>
+              <input type="number" id="setRepair" min="0" max="5" step="1">
+            </label>
+            <div class="status-line" id="tasksStatus" role="status"></div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h2 class="section-title">Execution sandbox</h2>
+              <button type="button" class="btn-ghost" id="btnSaveSandbox">Save</button>
+            </header>
+            <div class="mini-list" id="sandboxReport"></div>
+            <div class="field-row">
+              <label class="field compact">
+                <span>Driver</span>
+                <select id="setDriver">
+                  <option value="process">Process (allowlist + limits)</option>
+                  <option value="docker">Docker container</option>
+                </select>
+              </label>
+              <label class="field compact">
+                <span>Network in sandbox</span>
+                <select id="setNetwork">
+                  <option value="off">Disabled (default)</option>
+                  <option value="on">Enabled — needed to install dependencies</option>
+                </select>
+              </label>
+              <label class="field compact">
+                <span>Timeout (seconds)</span>
+                <input type="number" id="setTimeout" min="5" max="600" step="5">
+              </label>
+            </div>
+            <div class="status-line" id="sandboxStatusLine" role="status"></div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h2 class="section-title">Voice</h2>
+              <button type="button" class="btn-ghost" id="btnSaveVoice">Save</button>
+            </header>
+            <div class="mini-list" id="voiceReport"></div>
+            <div class="field-row">
+              <label class="field compact">
+                <span>Voice id (Fish Audio)</span>
+                <input type="text" id="setVoiceRef" placeholder="optional model id">
+              </label>
+              <label class="field compact">
+                <span>Model</span>
+                <input type="text" id="setVoiceModel" placeholder="s2-pro">
+              </label>
+              <label class="field compact">
+                <span>Speed</span>
+                <input type="number" id="setVoiceSpeed" min="0.5" max="2" step="0.1">
+              </label>
+            </div>
+            <div class="btn-row">
+              <button type="button" class="btn-ghost" id="btnVoiceTest">Test voice (real request)</button>
+              <button type="button" class="btn-ghost" id="btnOpenVoiceClassic">Speech &amp; microphone settings</button>
+            </div>
+            <div class="status-line" id="voiceStatusLine" role="status"></div>
+            <p class="hint">Text-to-speech and speech recognition are separate capabilities. The microphone uses your browser’s speech recognition and works without any key; spoken replies need a Fish Audio key on the server.</p>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head"><h2 class="section-title">Security</h2></header>
+            <div class="mini-list" id="securityReport"></div>
+            <p class="hint">Provider keys, GitHub tokens and the Fish Audio key are stored on the server, never in the browser, never in local storage, and never in this repository. Reads return a four-character hint.</p>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head">
+              <h2 class="section-title">Environment</h2>
+              <button type="button" class="btn-ghost" id="btnRefreshEnv">Refresh</button>
+            </header>
+            <p class="panel-note">Copy <code>server/.env.example</code> to <code>server/.env</code> and fill in what you have. One working provider key is enough.</p>
+            <div class="env-list" id="envList"></div>
+          </section>
+
+          <section class="panel">
+            <header class="panel-head"><h2 class="section-title">Appearance, memory and data</h2></header>
+            <p class="panel-note">Theme, density, language, memory, conversation storage, export/import and the advanced diagnostics panel live in the original settings sheet.</p>
+            <div class="btn-row">
+              <button type="button" class="btn-ghost" id="btnOpenClassicSettings">Open appearance &amp; data settings</button>
+              <button type="button" class="btn-ghost" id="btnOpenDoctor">Run diagnostics</button>
+            </div>
+            <p class="build-stamp" id="buildStampStudio"></p>
+          </section>
+        </div>
+      </section>
+
     </div>
   </div>
+
+  <nav class="tabbar" id="tabbar" aria-label="Main areas">
+    <button type="button" class="tab-item" data-view="home" id="tabHome">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
+      <span>Home</span>
+    </button>
+    <button type="button" class="tab-item" data-view="projects" id="tabProjects">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h3.5l2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <span>Projects</span>
+    </button>
+    <button type="button" class="tab-item is-active" data-view="assistant" id="tabAssistant">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 3.5v2M12 18.5v2M4.9 7.5l1.7 1M17.4 15.5l1.7 1M4.9 16.5l1.7-1M17.4 8.5l1.7-1"/></svg>
+      <span>Assistant</span>
+    </button>
+    <button type="button" class="tab-item" data-view="models" id="tabModels">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5l1.5 3.6 3.6 1.5-3.6 1.5L12 17.5l-1.5-3.9L6.9 12l3.6-1.5z"/></svg>
+      <span>Models</span>
+    </button>
+    <button type="button" class="tab-item" data-view="settings" id="tabSettings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.4M12 18.6V21M4.2 7.5l2 1.2M17.8 15.3l2 1.2M4.2 16.5l2-1.2M17.8 8.7l2-1.2"/></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
 </div>
 
 <!-- ============================ OVERLAYS ============================ -->

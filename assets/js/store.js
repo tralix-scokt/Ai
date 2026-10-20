@@ -70,6 +70,13 @@ export const DEFAULT_SETTINGS = {
 
   onboarded: false,
   sidebarCollapsed: false,
+
+  /* JARVIS STUDIO workspace */
+  view: 'assistant',            // last open area — Home · Projects · Assistant · Models · Settings
+  taskMode: false,
+  studio: {
+    autonomy: '',               // '' = use the server default
+  },
 };
 
 /* ------------------------------- low level ------------------------------- */
