@@ -1,29 +1,58 @@
 {
-  "name": "tralix-backend",
-  "description": "TRALIX backend — holds the OpenAI key, serves /api/chat",
-  "repository": "https://github.com/tralix-scokt/Ai",
-  "rootDirectory": ".",
-  "startCommand": "node server/node.js",
-  "healthCheckPath": "/api/health?probe=1",
-  "env": {
-    "NODE_VERSION": { "value": "20", "sync": false },
-    "OPENAI_API_KEY": {
-      "description": "OpenAI API key (server only, never committed)",
-      "sync": false
-    },
-    "TRALIX_ALLOWED_ORIGINS": {
-      "value": "https://tralix-scokt.github.io",
-      "sync": false
-    },
-    "TRALIX_ENABLE_WEB_SEARCH": {
-      "value": "false",
-      "sync": false
+  "$schema": "https://render.com/blueprint.schema.json",
+  "services": [
+    {
+      "type": "web",
+      "name": "jarvis-studio",
+      "runtime": "node",
+      "repo": "https://github.com/tralix-scokt/Ai",
+      "branch": "main",
+      "region": "oregon",
+      "plan": "starter",
+      "rootDir": ".",
+      "buildCommand": "npm install --omit=dev --no-audit --no-fund",
+      "startCommand": "node server/node.js --static",
+      "healthCheckPath": "/api/health",
+      "envVars": [
+        { "key": "NODE_VERSION", "value": "20" },
+
+        { "key": "JARVIS_DATA_DIR", "value": "/var/data" },
+        {
+          "key": "JARVIS_WRITE_TOKEN",
+          "description": "Shared secret required for every mutating API call. Required: this service is on the public internet.",
+          "generateValue": true
+        },
+        {
+          "key": "TRALIX_ALLOWED_ORIGINS",
+          "description": "Comma-separated browser origins allowed to call the API. Only needed if the frontend is NOT served by this service (e.g. GitHub Pages).",
+          "value": "https://tralix-scokt.github.io"
+        },
+
+        { "key": "GEMINI_API_KEY", "description": "Free tier — first choice in Free-first routing.", "sync": false },
+        { "key": "GROQ_API_KEY", "description": "Free tier, very fast.", "sync": false },
+        { "key": "OPENROUTER_API_KEY", "description": "Free tier — models tagged :free.", "sync": false },
+        { "key": "OPENAI_API_KEY", "description": "Paid. Also powers the legacy /api/chat endpoint.", "sync": false },
+        { "key": "ANTHROPIC_API_KEY", "description": "Paid.", "sync": false },
+        { "key": "MISTRAL_API_KEY", "description": "Paid.", "sync": false },
+
+        {
+          "key": "GITHUB_TOKEN",
+          "description": "Fine-grained PAT, server-side: Contents read+write, Metadata read, Pull requests read+write.",
+          "sync": false
+        },
+
+        { "key": "FISH_AUDIO_API_KEY", "description": "Optional. Spoken replies only — the microphone does not need it.", "sync": false },
+
+        { "key": "JARVIS_SANDBOX_DRIVER", "value": "process" },
+        { "key": "JARVIS_SANDBOX_NETWORK", "value": "off" },
+        { "key": "JARVIS_PAID_FALLBACK", "value": "false" },
+        { "key": "JARVIS_MONTHLY_LIMIT_USD", "value": "0" }
+      ],
+      "disk": {
+        "name": "jarvis-data",
+        "mountPath": "/var/data",
+        "sizeGB": 1
+      }
     }
-  },
-  "domains": [
-    { "name": "" }
-  ],
-  "numInstances": 1,
-  "plan": "starter",
-  "region": "oregon"
+  ]
 }

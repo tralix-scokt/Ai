@@ -221,6 +221,39 @@ deploying so the new service worker replaces the cached shell.
 ./tools/deploy-backend.sh          # …or from your machine
 ```
 
+### Render (one service, app + API)
+
+`render.json` is a ready-made Blueprint. New → Blueprint → point it at this repo
+and it creates a Node web service that serves **both** the interface and the API:
+
+```
+Build:   npm install --omit=dev --no-audit --no-fund
+Start:   node server/node.js --static          # --static serves the frontend too
+Health:  /api/health                            # not ?probe=1 — that spends a vendor call
+Disk:    /var/data  (1 GB)  with  JARVIS_DATA_DIR=/var/data
+Node:    20
+```
+
+Manual setup works the same way — a **Web Service**, runtime **Node**, no build
+step beyond the install above. Then set the environment variables from the table
+in `render.json`; the two that matter most on a public host are
+`JARVIS_WRITE_TOKEN` (without it, anyone who finds the URL can change settings
+and start tasks) and, if the frontend lives on GitHub Pages rather than on this
+service, `TRALIX_ALLOWED_ORIGINS=https://<you>.github.io`.
+
+Three things Render changes, honestly:
+
+- **The filesystem is ephemeral.** Attach the disk above, or settings, keys and
+  task history reset on every restart and redeploy.
+- **No Docker inside the runtime.** `JARVIS_SANDBOX_DRIVER=docker` cannot work
+  there; the sandbox runs as a limited process and may also lack `prlimit` /
+  `unshare`. Settings → Execution reports exactly which of those this host has.
+- **Free and starter instances sleep.** The first request after an idle period is
+  slow; health checks keep a paid instance warm.
+
+If you serve the frontend from GitHub Pages instead, drop `--static` from the
+start command, keep the CORS variable, and put the service URL in `backend.json`.
+
 **Connecting them** — put the backend URL in `backend.json` (a public pointer,
 never a key) and push:
 
