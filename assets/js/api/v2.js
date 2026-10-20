@@ -213,6 +213,8 @@ export const runCommand = (payload, { signal } = {}) =>
 export const voiceStatus = ({ signal } = {}) => get('/voice/status', { signal, timeoutMs: 10000 });
 export const saveVoiceKey = (key, referenceId = '', { signal } = {}) =>
   send('POST', '/voice/key', { key, referenceId }, { signal, timeoutMs: 15000 });
+export const removeVoiceKey = ({ signal } = {}) =>
+  send('DELETE', '/voice/key', undefined, { signal, timeoutMs: 15000 });
 
 /**
  * Speak text through the server-side provider.

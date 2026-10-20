@@ -55,6 +55,7 @@ export async function status(env) {
     model: cfg.model,
     voiceId: cfg.referenceId,
     format: cfg.format,
+    speed: clamp(Number(cfg.speed) || 1, 0.5, 2),
     maxChars: MAX_CHARS,
     note: cfg.key
       ? 'Configured. Press "Test voice" to make a real request — JARVIS never marks a voice as working without one.'

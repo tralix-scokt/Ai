@@ -562,6 +562,17 @@
             <div class="mini-list" id="voiceReport"></div>
             <div class="field-row">
               <label class="field compact">
+                <span>Fish Audio key</span>
+                <input type="password" id="setVoiceKey" placeholder="paste a key to store it on the server" autocomplete="off" spellcheck="false">
+              </label>
+              <div class="btn-row">
+                <button type="button" class="btn-primary" id="btnVoiceSaveKey">Save key</button>
+                <button type="button" class="btn-ghost" id="btnVoiceRemoveKey">Remove</button>
+              </div>
+            </div>
+            <p class="hint" id="voiceKeyHint">The key is stored on the server and never shown again — only a hint comes back. On a host without a disk (Render's free plan) stored keys reset when the service restarts, so set FISH_AUDIO_API_KEY there instead.</p>
+            <div class="field-row">
+              <label class="field compact">
                 <span>Voice id (Fish Audio)</span>
                 <input type="text" id="setVoiceRef" placeholder="optional model id">
               </label>

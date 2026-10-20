@@ -106,6 +106,31 @@ globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 0);
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 globalThis.window.requestAnimationFrame = globalThis.requestAnimationFrame;
 
+/*
+ * jsdom implements no media playback, so spoken replies are driven through a
+ * stand-in Audio element the test can start and finish by hand.
+ */
+class FakeAudio {
+  static instances = [];
+  constructor(src) {
+    this.src = src;
+    this.playing = false;
+    this.listeners = {};
+    FakeAudio.instances.push(this);
+  }
+  addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }
+  removeEventListener(type, fn) {
+    this.listeners[type] = (this.listeners[type] || []).filter(f => f !== fn);
+  }
+  play() { this.playing = true; return Promise.resolve(); }
+  pause() { this.playing = false; }
+  /** Test helper: the audio finished playing. */
+  finish() { this.playing = false; for (const fn of this.listeners.ended || []) fn(); }
+  fail() { for (const fn of this.listeners.error || []) fn(); }
+}
+globalThis.Audio = FakeAudio;
+window.Audio = FakeAudio;
+
 /* ------------------------------ backend.json ------------------------------ */
 // The harness answers ./backend.json so the deployed-frontend path is testable.
 let backendJson = { url: '' };
@@ -119,6 +144,11 @@ const v2Requests = [];
 let v2Mode = 'ok';                  // 'ok' | 'blocked' | 'missing'
 /** Whether the mocked /api/health advertises the routing layer. */
 let healthV2 = false;
+/** 'off' = no voice key on the server, 'server' = Fish Audio configured. */
+let voiceMode = 'off';
+const speechRequests = [];
+/** 'short' or 'long' — a long reply must be split before it is spoken. */
+let replyLength = 'short';
 
 globalThis.fetch = async (url, init = {}) => {
   const target = String(url);
@@ -188,6 +218,27 @@ globalThis.fetch = async (url, init = {}) => {
     return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
   }
 
+  if (target.includes('/api/v2/voice/status')) {
+    return jsonResponse({
+      provider: 'fish-audio',
+      configured: voiceMode === 'server',
+      keySource: voiceMode === 'server' ? 'environment' : '',
+      keyHint: voiceMode === 'server' ? 'fa-…0001' : '',
+      model: 's2-pro', voiceId: '', format: 'mp3', speed: 1.15, maxChars: 1200,
+    });
+  }
+
+  if (target.includes('/api/v2/voice/speak')) {
+    speechRequests.push({ url: target, body: init.body ? JSON.parse(init.body) : null });
+    if (voiceMode !== 'server') {
+      return jsonResponse({ error: { code: 'invalid_config', message: 'Text-to-speech is not configured.' } }, 503);
+    }
+    return new Response(Buffer.from([0x49, 0x44, 0x33, 0x03]), {
+      status: 200,
+      headers: { 'Content-Type': 'audio/mpeg' },
+    });
+  }
+
   if (target.includes('/api/chat') && fetchMode === 'slow') {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -206,11 +257,14 @@ globalThis.fetch = async (url, init = {}) => {
   }
 
   if (target.includes('/api/chat')) {
-    const chunks = [
-      { type: 'delta', text: '**Bold** answer with code:\n\n```js\nconst x = 2 ** 10;\n```\n' },
-      { type: 'delta', text: '- one\n- two\n' },
-      { type: 'done', model: 'gpt-5' },
-    ];
+    const long = 'This is a sentence long enough to need splitting. '.repeat(40);
+    const chunks = replyLength === 'long'
+      ? [{ type: 'delta', text: long }, { type: 'done', model: 'gpt-5' }]
+      : [
+        { type: 'delta', text: '**Bold** answer with code:\n\n```js\nconst x = 2 ** 10;\n```\n' },
+        { type: 'delta', text: '- one\n- two\n' },
+        { type: 'done', model: 'gpt-5' },
+      ];
     streamedText = chunks.map(c => c.text || '').join('');
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -696,6 +750,114 @@ console.log('\n— backend URL resolution (GitHub Pages deployment) —');
 
   backendJson = { url: '' };
   window.history.replaceState({}, '', restoreSearch || '/Ai/');
+}
+
+console.log('\n— spoken replies —');
+{
+  const store = await import('../assets/js/store.js');
+
+  // Driven through the real controls, so the app's own settings state changes.
+  const setToggle = (id, value) => {
+    const el = $(id);
+    el.checked = value;
+    el.dispatchEvent(new window.Event('change', { bubbles: true }));
+  };
+  setToggle('#setVoiceAuto', true);
+  t('auto-speak also enables voice output', store.loadSettings().voice.enabled === true);
+
+  const sendUi = async (text) => {
+    $('#composer-input').value = text;
+    $('#composer-input').dispatchEvent(new window.Event('input', { bubbles: true }));
+    $('#composer').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await flush(200);
+  };
+
+  // jsdom offers no speech synthesis, so the device voice is genuinely absent
+  // here — which makes this a clean test of the server path and its fallback.
+  const deviceVoiceAvailable = 'speechSynthesis' in window;
+  t('the test environment has no device voice (the server path is under test)', !deviceVoiceAvailable);
+
+  /** Play every piece of audio the app asks for, as a real browser would. */
+  const pumpAudio = async (max = 60) => {
+    for (let i = 0; i < max; i += 1) {
+      await flush(15);
+      const playing = FakeAudio.instances.find(a => a.playing);
+      if (playing) { playing.finish(); continue; }
+      if (speechRequests.length && i > 3) return;
+    }
+  };
+
+  voiceMode = 'off';
+  replyLength = 'short';
+  speechRequests.length = 0;
+  FakeAudio.instances.length = 0;
+  await sendUi('Say hello');
+  t('with no voice key on the server nothing is sent to be spoken',
+    speechRequests.length === 0, String(speechRequests.length));
+  t('and nothing was handed to a player', FakeAudio.instances.length === 0);
+
+  // Adding a key in Settings → Voice tells the assistant to re-check.
+  voiceMode = 'server';
+  window.dispatchEvent(new window.CustomEvent('jarvis:voice-changed'));
+  replyLength = 'long';
+  speechRequests.length = 0;
+  FakeAudio.instances.length = 0;
+  await sendUi('Explain the plan in detail');
+  await pumpAudio();
+
+  const pieces = speechRequests.map(r => r.body?.text || '');
+  t('a reply longer than the provider allows is split into pieces',
+    pieces.length > 1, `${pieces.length} piece(s)`);
+  t('no piece exceeds the server limit',
+    pieces.every(piece => piece.length <= 1100),
+    pieces.map(p => p.length).join(', '));
+  t('nothing is dropped: the pieces carry the whole reply',
+    pieces.join(' ').length > 1900, String(pieces.join(' ').length));
+  t('the pieces begin where the reply begins',
+    pieces[0].startsWith('This is a sentence long enough to need splitting.'), pieces[0].slice(0, 60));
+  t('no piece is empty', pieces.every(p => p.trim().length > 0));
+  t('the speaking speed is sent with every piece',
+    speechRequests.length > 0 && speechRequests.every(r => r.body?.speed === 1.15),
+    String(speechRequests.map(r => r.body?.speed)));
+
+  // Stop mid-reply: the audio must actually stop, and nothing further is fetched.
+  speechRequests.length = 0;
+  FakeAudio.instances.length = 0;
+  await sendUi('Another long answer, please');
+  await flush(60);
+  t('a piece is playing', FakeAudio.instances.some(a => a.playing));
+
+  const stopButton = $$('.msg-actions [data-role="speak"]').at(-1);
+  t('the speaking message offers Stop', /Stop/.test(stopButton?.textContent || ''),
+    stopButton?.textContent);
+  if (stopButton) stopButton.dispatchEvent(new window.Event('click', { bubbles: true }));
+  await flush(150);
+  const atStop = speechRequests.length;
+  await pumpAudio();
+
+  t('Stop ends the audio instead of leaving it pending',
+    !FakeAudio.instances.some(a => a.playing));
+  t('no further audio is requested after Stop',
+    speechRequests.length === atStop, `${atStop} → ${speechRequests.length}`);
+  t('the status returns to idle after speaking', $('#statusSidebar').dataset.state === 'idle',
+    $('#statusSidebar').dataset.state);
+
+  // A failure halfway through is reported, not silently switched to another voice.
+  speechRequests.length = 0;
+  FakeAudio.instances.length = 0;
+  await sendUi('One more long answer');
+  await flush(60);
+  FakeAudio.instances.find(a => a.playing)?.finish();
+  await flush(40);
+  FakeAudio.instances.find(a => a.playing)?.fail();       // the second piece fails
+  await flush(60);
+  t('a broken player is reported rather than ignored',
+    /stopped/i.test($('#toast')?.textContent || ''), ($('#toast')?.textContent || '').slice(0, 80));
+
+  setToggle('#setVoiceAuto', false);
+  t('auto-speak can be turned off again', store.loadSettings().voice.auto === false);
+  voiceMode = 'off';
+  replyLength = 'short';
 }
 
 console.log('\n— errors during the run —');

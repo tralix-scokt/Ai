@@ -180,7 +180,7 @@ export function createSettings(deps) {
     select.value = settings.voice.voiceURI || '';
 
     const note = $('#voiceSupportNote');
-    if (!Voice.ttsSupported) note.textContent = 'This browser cannot speak text aloud.';
+    if (!Voice.ttsSupported) note.textContent = 'This browser has no built-in voices. JARVIS can still speak through the server voice — add a provider key under Settings → Voice.';
     else if (!voices.length) note.textContent = 'Voices load after the first tap on iOS — reopen Settings if the list is empty.';
     else note.textContent = `${voices.length} voices available on this device.`;
   }
@@ -251,7 +251,7 @@ export function createSettings(deps) {
     });
 
     $('#btnTestVoice').addEventListener('click', () => {
-      if (!Voice.ttsSupported) { toast('This browser cannot speak.', { tone: 'error' }); return; }
+      if (!Voice.ttsSupported) { toast('This browser has no built-in voices. Use Test voice under Settings → Voice to try the server voice.', { tone: 'error' }); return; }
       const settings = getSettings();
       Voice.speak(`Hello. I am ${APP.name}. Ready when you are.`, {
         voiceURI: settings.voice.voiceURI,

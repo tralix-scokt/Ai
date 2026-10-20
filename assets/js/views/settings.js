@@ -10,7 +10,7 @@
 
 import { $, escapeHtml } from '../util.js';
 import * as Api from '../api/v2.js';
-import { toast } from '../ui/feedback.js';
+import { toast, confirmDialog } from '../ui/feedback.js';
 import { openSheet } from '../ui/sheets.js';
 import { TralixError } from '../errors.js';
 
@@ -87,6 +87,15 @@ export function createSettingsView({ nav, settingsUi }) {
       }),
       ...(report.notes || []).map(noteText => row({ title: 'Note', sub: noteText, tone: 'warn' })),
     ].join('');
+  }
+
+  /** Re-read only the voice status — used after a key is added or removed. */
+  async function refreshVoiceReport() {
+    try {
+      renderVoice(await Api.voiceStatus({}));
+    } catch {
+      /* the panel keeps its last honest state; refresh() runs on navigation */
+    }
   }
 
   function renderVoice(status) {
@@ -208,6 +217,64 @@ export function createSettingsView({ nav, settingsUi }) {
         speed: Number($('#setVoiceSpeed').value) || 1,
       },
     }, voiceStatus, 'Voice preferences saved.');
+    // The chat caches the server voice (including its speed): drop that cache.
+    announceVoiceChange();
+  });
+
+  /**
+   * The two buttons that actually change whether JARVIS can speak. Saving a key
+   * tells the assistant to stop relying on its cached answer, so the next reply
+   * uses the voice that was just configured instead of waiting for a reload.
+   */
+  function announceVoiceChange() {
+    window.dispatchEvent(new CustomEvent('jarvis:voice-changed'));
+  }
+
+  $('#btnVoiceSaveKey')?.addEventListener('click', async () => {
+    const button = $('#btnVoiceSaveKey');
+    const key = $('#setVoiceKey')?.value.trim();
+    if (!key) {
+      voiceStatus.textContent = 'Paste a key first.';
+      voiceStatus.className = 'status-line bad';
+      $('#setVoiceKey')?.focus();
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    try {
+      const result = await Api.saveVoiceKey(key, $('#setVoiceRef').value.trim());
+      if ($('#setVoiceKey')) $('#setVoiceKey').value = '';
+      voiceStatus.textContent = `Key saved on the server (${result.hint || 'stored'}). Press “Test voice” to prove it works.`;
+      voiceStatus.className = 'status-line ok';
+      announceVoiceChange();
+      refreshVoiceReport();
+    } catch (error) {
+      voiceStatus.textContent = error instanceof TralixError ? error.message : 'The key could not be saved.';
+      voiceStatus.className = 'status-line bad';
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Save key';
+    }
+  });
+
+  $('#btnVoiceRemoveKey')?.addEventListener('click', async () => {
+    const okToRemove = await confirmDialog({
+      title: 'Remove the Fish Audio key?',
+      body: 'Spoken replies stop working until another key is added. The microphone is unaffected.',
+      confirmLabel: 'Remove key',
+      danger: true,
+    });
+    if (!okToRemove) return;
+    try {
+      await Api.removeVoiceKey({});
+      voiceStatus.textContent = 'Key removed. Spoken replies are off; the microphone still works.';
+      voiceStatus.className = 'status-line ok';
+      announceVoiceChange();
+      refreshVoiceReport();
+    } catch (error) {
+      voiceStatus.textContent = error instanceof TralixError ? error.message : 'The key could not be removed.';
+      voiceStatus.className = 'status-line bad';
+    }
   });
 
   $('#btnVoiceTest')?.addEventListener('click', async () => {

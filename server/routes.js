@@ -624,6 +624,13 @@ export async function handle(request, env, { pathname, search } = {}) {
     return new Response(response.body, { status: response.status, headers });
   }
 
+  if (path === '/voice/key' && method === 'DELETE') {
+    const blocked = guard(request, env);
+    if (blocked) return blocked;
+    await Store.setSecret('tts.fishAudioKey', '');
+    return ok({ removed: true, status: await Tts.status(env) }, request, env);
+  }
+
   if (path === '/voice/key' && method === 'POST') {
     const blocked = guard(request, env);
     if (blocked) return blocked;

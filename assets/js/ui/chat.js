@@ -74,6 +74,15 @@ export function createChatController(deps) {
     syncJumpButton();
   }
 
+  /*
+   * Whether the server has a voice configured is cached briefly, not forever:
+   * a key can be added in Settings → Voice while the app is open, and the next
+   * reply should use it without a reload. "Not configured" is trusted for a
+   * shorter time than "configured", because that is the answer that changes.
+   */
+  const VOICE_TTL_MS = { configured: 300_000, unconfigured: 30_000 };
+  let voiceLookup = { value: null, at: 0 };
+
   function contextFor(msg, index, messages) {
     const visible = messages.filter(m => !m.hidden);
     const isLast = visible[visible.length - 1]?.id === msg.id;
@@ -81,7 +90,9 @@ export function createChatController(deps) {
       streaming: streaming && isLast && msg.role === 'assistant',
       isLast,
       speakingId,
-      ttsSupported: Voice.ttsSupported,
+      // A server voice (Fish Audio) can speak in browsers that have no
+      // device voices at all, so the control follows either of them.
+      ttsSupported: Voice.ttsSupported || Boolean(voiceLookup.value),
       modelLabel: modelLabelFor(msg),
       onAction: handleAction,
     };
@@ -319,7 +330,10 @@ export function createChatController(deps) {
       deps.onRequestSucceeded?.();
     }
 
-    if (settings.voice.enabled && settings.voice.auto && Voice.ttsSupported) {
+    // Auto-speak must not depend on the device having its own voices: when the
+    // server has a provider configured, that is what speaks. Only stay silent
+    // when there is genuinely nothing to speak with.
+    if (settings.voice.enabled && settings.voice.auto && (Voice.ttsSupported || await serverVoice())) {
       speakMessage(botMsg, { auto: true });
     }
   }
@@ -507,48 +521,86 @@ export function createChatController(deps) {
    * If the first is not configured or fails, the second takes over and nothing
    * is claimed about which one spoke.
    */
-  let serverVoiceState = null;        // null = not asked yet, false = unavailable
   let serverAudio = null;
+  let stopCurrentChunk = null;        // settles the chunk that is playing
+
+  /** The server refuses text longer than 1200 characters (see server/tts.js). */
+  const SERVER_SPEECH_CHUNK = 1100;
 
   async function serverVoice() {
-    if (serverVoiceState !== null) return serverVoiceState;
+    const now = Date.now();
+    if (voiceLookup.value !== null
+      && now - voiceLookup.at < (voiceLookup.value ? VOICE_TTL_MS.configured : VOICE_TTL_MS.unconfigured)) {
+      return voiceLookup.value;
+    }
     try {
       const status = await V2.voiceStatus({});
-      serverVoiceState = status?.configured ? status : false;
+      voiceLookup = { value: status?.configured ? status : false, at: now };
     } catch {
-      serverVoiceState = false;
+      voiceLookup = { value: false, at: now };
     }
-    return serverVoiceState;
+    return voiceLookup.value;
   }
 
-  /** Speak through the server provider and resolve when the audio finishes. */
+  /*
+   * Ask once whether the server can speak, so the Read-aloud control is offered
+   * for a server voice from the start instead of only after the first reply.
+   * Runs at most once per (re)configuration.
+   */
+  let voicePrimed = false;
+  async function primeVoice() {
+    if (voicePrimed) return;
+    voicePrimed = true;
+    const before = Boolean(voiceLookup.value);
+    const now = await serverVoice();
+    if (Boolean(now) !== before) render();
+  }
+
+  // Settings → Voice adds or removes a key: drop the cached answer at once.
+  window.addEventListener('jarvis:voice-changed', () => {
+    voiceLookup = { value: null, at: 0 };
+    if (getSettings().voice.enabled) { voicePrimed = false; primeVoice(); }
+  });
+
+  /**
+   * Speak one piece of text through the server provider.
+   * Resolves `{ stopped: true }` when Stop interrupts it instead of hanging.
+   */
   function playServerSpeech(text, { speed = 1 }) {
     return new Promise((resolve, reject) => {
       let settled = false;
+      const settle = (value) => {
+        if (settled) return;
+        settled = true;
+        stopCurrentChunk = null;
+        try { serverAudio?.pause(); } catch { /* already stopped */ }
+        serverAudio = null;
+        resolve(value);
+      };
+
+      // Stop must be able to end a chunk: pausing alone never fires 'ended',
+      // which would leave this promise pending for the rest of the session.
+      stopCurrentChunk = () => settle({ stopped: true });
+
       V2.speak(text, { speed }).then(({ url, revoke }) => {
+        if (settled) { revoke?.(); return; }
         serverAudio = new Audio(url);
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          try { serverAudio.pause(); } catch { /* already stopped */ }
-          serverAudio = null;
-          revoke?.();
-          resolve();
-        };
-        serverAudio.addEventListener('ended', finish, { once: true });
+        serverAudio.addEventListener('ended', () => { revoke?.(); settle({ stopped: false }); }, { once: true });
         serverAudio.addEventListener('error', () => {
+          revoke?.();
           if (settled) return;
           settled = true;
+          stopCurrentChunk = null;
           serverAudio = null;
-          revoke?.();
           reject(new Error('The spoken audio could not be played.'));
         }, { once: true });
         serverAudio.play().catch((err) => {
+          revoke?.();
           if (settled) return;
           settled = true;
+          stopCurrentChunk = null;
           serverAudio = null;
-          revoke?.();
-          reject(err instanceof Error ? err : new Error('Playback was blocked.'));
+          reject(err instanceof Error ? err : new Error('Playback was blocked by the browser.'));
         });
       }).catch(reject);
     });
@@ -577,16 +629,36 @@ export function createChatController(deps) {
       setStatus('speaking');
     };
 
-    if (await serverVoice()) {
+    const voice = await serverVoice();
+    if (voice) {
+      // The server voice has its own speed; the device rate applies only to
+      // the browser's own speech synthesis below.
+      const speed = Number(voice.speed) || Number(settings.voice.rate) || 1;
       begin();
+      let spoken = 0;
       try {
-        await playServerSpeech(text, { speed: settings.voice.rate });
-        clear();
+        // A long reply is spoken in sentence-sized pieces: sending it whole
+        // would be refused for length and would silently switch voices
+        // halfway through the answer.
+        for (const chunk of Voice.chunkText(text, SERVER_SPEECH_CHUNK)) {
+          if (speakingId !== msg.id) break;                 // Stop was pressed
+          const { stopped } = await playServerSpeech(chunk, { speed });
+          if (stopped) break;
+          spoken += 1;
+        }
+        if (speakingId === msg.id) clear();
         if (!auto) haptic(4);
         return;
-      } catch {
+      } catch (error) {
         // Ask again next time: a transient failure is not a configuration.
-        serverVoiceState = null;
+        voiceLookup = { value: null, at: 0 };
+        if (spoken > 0) {
+          // Something was already said — restarting in a different voice would
+          // be worse than saying plainly that the audio stopped early.
+          toast(`Spoken audio stopped after ${spoken} part${spoken === 1 ? '' : 's'}: ${error?.message || 'unknown error'}`, { tone: 'error', ms: 4200 });
+          clear();
+          return;
+        }
       }
     }
 
@@ -608,6 +680,8 @@ export function createChatController(deps) {
 
   function stopSpeaking() {
     Voice.stopSpeaking();
+    // Settle the chunk that is playing first: pausing alone never ends it.
+    stopCurrentChunk?.();
     if (serverAudio) {
       try { serverAudio.pause(); } catch { /* nothing to stop */ }
       serverAudio = null;
@@ -623,6 +697,10 @@ export function createChatController(deps) {
   }
 
   /* --------------------------------- public ------------------------------- */
+
+  // Find out whether the server can speak, without waiting for a reply.
+  if (getSettings().voice.enabled) primeVoice();
+
   return {
     render,
     newChat,
