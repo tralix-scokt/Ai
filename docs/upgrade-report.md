@@ -1,5 +1,9 @@
 # TRALIX AI — Upgrade Report
 
+> *Historical: this report describes the earlier TRALIX AI 2.0 build. The product
+> is now JARVIS STUDIO — see [studio-report.md](./studio-report.md) for the current
+> architecture, verification and limits.*
+
 Upgrade of the existing repository, in place. Nothing was rebuilt from scratch, no working
 functionality was removed, and every feature that is not genuinely implemented is either absent
 or labelled **Coming soon**. No API key exists anywhere in the frontend.

@@ -1,260 +1,302 @@
-# TRALIX AI
+# JARVIS STUDIO
 
-**Intelligent AI Assistant** — a mature, mobile-first AI assistant you can install
-on your Home Screen, plus a secure backend that keeps the OpenAI key on the server.
+**An AI coding workspace** — free-first multi-model routing, GitHub tasks that stop
+for human review, checks that run in an isolated sandbox, and a voice-enabled
+assistant. Buildless static PWA on the front, a dependency-free Node/Cloudflare
+backend on the back.
 
 ```
-User
- ↓
-TRALIX AI frontend                    (static PWA — GitHub Pages safe)
- ↓
-Secure TRALIX backend / API           (holds the key, enforces the rules)
- ↓
-OpenAI API → OpenAI model
- ↓
-TRALIX backend → TRALIX AI frontend → User
+Browser ── static PWA (GitHub Pages safe) ──┐
+                                            │  /api/v2/*
+                                   JARVIS backend (Node or Worker)
+                                            │
+        ┌───────────────┬───────────────────┼─────────────────┬──────────────┐
+   free-tier models  paid models      GitHub API        Fish Audio       sandbox
+   Gemini · Groq     OpenAI · Anthropic  (repos,        (text-to-speech) (allowlisted
+   OpenRouter        Mistral            branches,                        commands,
+   Ollama (local)                       commits, PRs)                    no network)
 ```
 
-No scraping, no browser automation, no ChatGPT.com behind the scenes: the app talks
-to the official **OpenAI Responses API** through our own `/api/chat` endpoint.
-
----
-
-## What it is now
-
-| This is TRALIX | This is not |
-|---|---|
-| An independent product identity (TRALIX AI · Intelligent AI Assistant) | A rebranded vendor chat window |
-| A mobile-first, iPhone-optimised interface | A desktop app squeezed onto a phone |
-| A secure backend + a static frontend | An API key pasted into JavaScript |
-| Honest about what it can and cannot do | A demo that pretends features exist |
-
-**JARVIS is a personality mode inside TRALIX**, not the product name.
-**Provider model names are an implementation detail** — users choose
-*TRALIX Fast / Smart / Code / Research*.
+**Renamed from TRALIX AI.** The product chrome, copy, title and manifest now say
+JARVIS STUDIO. Storage keys (`tralix.*.v2`), tier ids (`tralix-smart`) and every
+environment variable (`TRALIX_*`) keep their old names, so an existing install
+keeps its data. The original assistant — chat, memory, projects, voice, PWA — is
+still there, unchanged in behaviour.
 
 ---
 
 ## Quick start
 
-### 1. Try the interface (no backend yet)
-
 ```bash
-npx serve .            # or: python3 -m http.server
+# 1. the whole product, locally (backend serves the app too)
+npm run serve                       # → http://localhost:8787
 ```
 
-The UI loads fully. Without a backend, sending a message produces a clear,
-professional error state instead of a fake reply.
+The interface works without any key: every provider card says *No key*, GitHub says
+*Not connected*, and the setup checklist tells you what is missing. Nothing on
+screen is invented — if the backend cannot be reached, the Home area says
+**Unreachable** and offers a retry.
 
-### 2. Run the whole product locally (recommended)
-
-```bash
-OPENAI_API_KEY=sk-... node server/node.js --static
-# → http://localhost:8787
-```
-
-### 3. Deploy
-
-**Frontend** — already static: push to `main`; GitHub Pages serves the app shell.
-(`.nojekyll` is present, all paths are relative, and the manifest keeps `id: "/Ai/"`.)
-After deploying, hard-refresh once so the new service worker replaces the old shell.
-
-**Backend** — it must be deployed separately, because GitHub Pages cannot run
-server code and cannot hold a secret. Pick one:
+Add a key when you have one (Settings → AI Models, or on the server):
 
 ```bash
-# Cloudflare Workers, via GitHub Actions (nothing to install)
-#   1. add repo secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, OPENAI_API_KEY
-#   2. run the "Deploy TRALIX backend" workflow — it prints the worker URL
-
-# …or from your machine
-export OPENAI_API_KEY=sk-...
-./tools/deploy-backend.sh
-
-# …or self-host the app and the API together on any Node 18+ box
-OPENAI_API_KEY=sk-... node server/node.js --static
+GEMINI_API_KEY=your-key npm run serve
 ```
 
-**Connect the two** — put the backend URL in `backend.json` (a public pointer,
+Then press **Test connection** on the provider card: the server makes a real
+request to the vendor and reports what came back. A key that was only typed is
+never called *connected*.
+
+---
+
+## The workspace
+
+| Area | What it does | Needs |
+|---|---|---|
+| **Home** | Live system status (free models, paid usage, GitHub, sandbox, voice), a setup checklist, recent tasks and recent conversations | the backend |
+| **Projects** | Connect GitHub, browse only the repositories the credential can see, pick a branch, read files, see per-repo task history | `GITHUB_TOKEN` |
+| **JARVIS Assistant** | Conversation with streaming replies, plus the **Coding task** toggle that turns a message into a repo task with a plan, diffs and review | a provider key |
+| **AI Models** | Provider cards with real verified state, key hints, cooldowns, enable/priority, the routing policy and the usage the vendor reported | — |
+| **Settings** | GitHub permissions, task autonomy, sandbox report, voice, security notes and an environment-variable report | — |
+
+Desktop: a rail on the left, the conversation or diff in the middle, the task panel
+on the right. Mobile: the same five areas in a bottom bar. Areas stay mounted when
+hidden, so a stream keeps running while you read a diff.
+
+---
+
+## Free-first routing
+
+Chat and coding tasks go through `/api/v2/chat`, which picks a provider per
+request:
+
+1. **Free first.** Free-tier providers (Gemini, Groq, OpenRouter, Ollama) are
+   ranked before paid ones; ties break on the priority you set.
+2. **Failover, not failure.** A provider that is rate limited, cooling down or
+   unreachable is skipped and the next eligible one is tried, with the context
+   preserved. The response reports which provider answered and what was skipped.
+3. **Paid usage is off by default.** A paid provider is only used after you
+   explicitly allow fallback **and** set a monthly ceiling in USD. With neither,
+   JARVIS stops with *No free model is available* rather than spending money.
+4. **Nothing is fabricated.** Usage is shown only when the provider reports it;
+   otherwise the table says *not reported*. Quotas, credits and costs are never
+   estimated in the UI.
+5. **One key is enough.** The app works with a single provider configured.
+
+Every provider can be disabled individually and given a priority.
+
+---
+
+## GitHub workflow
+
+A coding task moves through explicit states — **queued → analyzing → planning →
+editing → testing → repairing → awaiting review → completed** (or
+`awaiting_plan_review`, `failed`, `cancelled`) — and the panel shows the state,
+the plan, the per-file diff, the captured stdout/stderr/exit codes of the checks
+that ran, and a second-model review when one exists.
+
+Safety rules, enforced in code and covered by tests:
+
+- work happens on an isolated branch (`jarvis/…` by default) — never on the default branch;
+- **nothing is committed until you press Commit**, and a pull request is only *prepared*, never merged;
+- destructive or externally visible actions ask first;
+- a task that cannot even plan creates no branch and reports why.
+
+Authentication is PAT-first: a server-side `GITHUB_TOKEN` (a fine-grained token
+limited to the repositories you choose, with *Contents: Read and write*,
+*Metadata: Read-only*, *Pull requests: Read and write*). GitHub App credentials
+and per-user OAuth are implemented as fallbacks. Tokens live on the server in a
+`0600` file and are returned to the browser only as a four-character hint.
+
+---
+
+## Safe execution
+
+Checks and tests never run on the app server's behalf with your secrets in reach:
+
+- a separate process with CPU/memory/time limits (`prlimit`/`unshare` when present, Docker when configured),
+- a restricted working directory that is cleaned up afterwards,
+- **network off by default**,
+- a command allowlist (`node`, `npm`, `pnpm`, `yarn`, `npx`, `python3`, `pytest`, `go`, `cargo`, `php`, `ruby`, `make`, `git`),
+- captured stdout, stderr, exit code and test results.
+
+Settings → *Execution* reports exactly which isolation this host provides. On a
+plain Node host without Docker it says **Process sandbox only** and tells you to
+set `JARVIS_SANDBOX_DRIVER=docker` on a host with Docker for real container
+isolation. It never claims more than the host delivers.
+
+---
+
+## Voice
+
+- **Text-to-speech** is proxied through the backend (Fish Audio), so the key never
+  reaches the browser. Not configured → spoken replies are simply off and the UI
+  says so.
+- **Speech recognition** is the browser's own Web Speech API. It is independent of
+  TTS, needs no key, and the audio never leaves the device.
+- The central orb animates for *idle · listening · thinking · speaking · error* and
+  respects `prefers-reduced-motion`. Voice is never a prerequisite for coding.
+
+---
+
+## Environment variables
+
+Server-side only — none of these belong in the frontend. See `server/.env.example`
+for the annotated file.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | recommended | Google Gemini — free tier, first choice in Free-first routing |
+| `GROQ_API_KEY` | optional | Groq — free tier, very fast |
+| `OPENROUTER_API_KEY` | optional | OpenRouter — free models tagged `:free` |
+| `OPENAI_API_KEY` | optional | OpenAI (paid). Also powers the legacy `/api/chat` endpoint |
+| `ANTHROPIC_API_KEY` | optional | Anthropic Claude (paid) |
+| `MISTRAL_API_KEY` | optional | Mistral (paid) |
+| `OLLAMA_BASE_URL` | optional | A local Ollama instance (free, no key) |
+| `GITHUB_TOKEN` | for repo work | Fine-grained PAT, server-side |
+| `GITHUB_APP_ID` · `GITHUB_APP_PRIVATE_KEY` · `GITHUB_APP_INSTALLATION_ID` | optional | GitHub App fallback |
+| `GITHUB_OAUTH_CLIENT_ID` · `GITHUB_OAUTH_CLIENT_SECRET` · `GITHUB_OAUTH_REDIRECT_URI` | optional | Per-user sign-in |
+| `FISH_AUDIO_API_KEY` | for spoken replies | Text-to-speech (the microphone does not need it) |
+| `FISH_AUDIO_MODEL` · `FISH_AUDIO_REFERENCE_ID` · `FISH_AUDIO_BASE_URL` | optional | Voice model, voice id, proxy override |
+| `JARVIS_WRITE_TOKEN` | recommended in production | Shared secret required for every mutating API call |
+| `JARVIS_DATA_DIR` | optional | Where settings, keys and task history are stored |
+| `JARVIS_SANDBOX_DRIVER` · `JARVIS_SANDBOX_NETWORK` · `JARVIS_SANDBOX_TIMEOUT_MS` · `JARVIS_SANDBOX_MEMORY_MB` | optional | Execution limits |
+| `TRALIX_ALLOWED_ORIGINS` | optional | CORS allowlist (default `*`) |
+| `TRALIX_MODEL_FAST` · `_SMART` · `_CODE` · `_RESEARCH` | optional | Override the tier → model mapping |
+| `TRALIX_ENABLE_WEB_SEARCH` | optional | Enables the OpenAI web-search tool and flips the capability in the UI |
+| `OPENAI_BASE_URL` | optional | Gateway/proxy override |
+| `PORT` | optional | Node adapter port (default 8787) |
+
+---
+
+## What genuinely works, and what needs something from you
+
+| Feature | State |
+|---|---|
+| Interface, navigation, PWA offline shell, themes | **Works out of the box** |
+| Chat with streaming replies | **Works** with any one provider key |
+| Free-first routing, failover, per-provider enable/priority | **Works** with one or more keys |
+| Paid fallback with a monthly ceiling | **Works** once you authorise it and set a limit |
+| Provider connection testing | **Works** — a real request, not a guess |
+| GitHub: list repos, branches, read files | **Works** with `GITHUB_TOKEN` and outbound access to `api.github.com` |
+| Coding tasks: plan → edit → diff → checks → review | **Works** with a provider key **and** GitHub |
+| Commit / pull-request preparation | **Works** — always behind an explicit button, never merged |
+| Sandbox checks | **Works** as a process sandbox; **container isolation needs Docker** on the host |
+| Spoken replies | **Works** with `FISH_AUDIO_API_KEY`; the device voice is the fallback |
+| Microphone input | **Works** where the browser supports Web Speech |
+| Supabase | **Not used.** Auth and persistence live in the backend's own store; there is no multi-user account system, so a database would add surface without adding capability |
+
+Deployment limits worth knowing: GitHub Pages can host the frontend only (it
+cannot run server code or hold a secret), so the backend must be deployed
+separately; the serverless Worker runtime has no filesystem or process spawning,
+so task history resets on redeploy and the sandbox is unavailable there. Run
+`node server/node.js` (VPS, Render, Railway, Fly, your laptop) for the full
+feature set.
+
+---
+
+## Running and deploying
+
+```bash
+npm run serve          # backend + frontend at http://localhost:8787
+npm run backend        # backend only
+npm run verify         # static checks + every test suite
+```
+
+**Frontend** — already static: push to `main`, GitHub Pages serves the app shell
+(`.nojekyll` is present and all paths are relative). Hard-refresh once after
+deploying so the new service worker replaces the cached shell.
+
+**Backend** — deploy separately:
+
+```bash
+# Cloudflare Workers via GitHub Actions: add CLOUDFLARE_API_TOKEN,
+# CLOUDFLARE_ACCOUNT_ID and your provider keys as repo secrets, then run the
+# "Deploy backend" workflow — it prints the worker URL.
+./tools/deploy-backend.sh          # …or from your machine
+```
+
+**Connecting them** — put the backend URL in `backend.json` (a public pointer,
 never a key) and push:
 
 ```json
-{ "url": "https://tralix-backend.<your-subdomain>.workers.dev" }
+{ "url": "https://your-backend.example.workers.dev" }
 ```
 
-The frontend resolves its API base from, in order: a device override saved in
-the app, `window.TRALIX_API_BASE`, `?api=https://…`, `backend.json`, then same
-origin. **Diagnostics** always reports which one is in use. For one device only,
-paste the URL in the Connect sheet (sidebar → connection row → **Set up**) and
-tap **Save & test** — that check performs a real upstream round-trip.
-
-### Environment / secrets
-
-### Environment / secrets
-
-| Variable | Where | Required | Notes |
-|---|---|---|---|
-| `OPENAI_API_KEY` | **server only** | yes | Never in the frontend, never in Git, never logged. |
-| `TRALIX_MODEL_FAST/_SMART/_CODE/_RESEARCH` | server | no | Override the tier → model mapping. |
-| `TRALIX_ALLOWED_ORIGINS` | server | no | Comma-separated CORS allowlist (default `*`). |
-| `TRALIX_ENABLE_WEB_SEARCH` | server | no | `true` enables the OpenAI web-search tool and flips the UI capability to *Available*. |
-| `OPENAI_BASE_URL` | server | no | Gateway/proxy override. |
-| `PORT` | server | no | Node adapter port (default 8787). |
-
-See `server/.env.example` and `server/README.md`.
-
----
-
-## Model system
-
-Users see tiers; the backend resolves them to provider models.
-
-| Tier | Tagline | Default mapping | Reasoning |
-|---|---|---|---|
-| `tralix-fast` | Fast responses | `gpt-5-mini` | minimal |
-| `tralix-smart` | More capable reasoning | `gpt-5` | low |
-| `tralix-code` | Programming-focused | `gpt-5-codex` | medium |
-| `tralix-research` | Research-oriented | `gpt-5` | high |
-
-Every default is overridable by environment variable, so model churn never requires
-a frontend change. Provider details surface only in **Settings → Advanced**, and in
-debug mode the picker shows the resolved model.
-
----
-
-## What is preserved from the previous build
-
-- All existing conversations, memories and settings — a real migration
-  (`jarvis.*.v1` → `tralix.*.v2`) runs on first launch and **leaves the old keys
-  untouched**, so nothing is lost and a rollback still finds its data.
-- Memory (now categorised: Personal · Preferences · Projects · Instructions · Other,
-  with edit/delete and an undo on delete).
-- Voice: push-to-talk speech recognition and spoken replies (now with voice choice,
-  speed, pitch, auto-speak and sentence-chunked playback for iOS).
-- PWA install, standalone display, safe-area handling, offline app shell.
-- Export / import backup, clear conversations, erase everything.
-- The optional bring-your-own-key provider mode (moved to Advanced, device-only).
-- The dark/light theme, the general look of the orb mark, and the deployment shape.
-
-## What is new
-
-- Sidebar information architecture: New chat, Search, Projects, conversation
-  history grouped Today / Yesterday / Previous 7 days, Settings, user area.
-  Collapsible on desktop, slide-out drawer on mobile.
-- Chat: streaming with *TRALIX is thinking…*, Stop generating, and per-response
-  actions (Copy · Regenerate · Read aloud · Like · Dislike · More →
-  Continue / Shorter / Longer / Explain / Rewrite / Save).
-- Markdown rendering with highlighted code blocks, language labels, copy buttons
-  and horizontal scrolling; tables, task lists, quotes, links.
-- The TRALIX system personality: precise, calm, professional, no filler enthusiasm,
-  with an explicit honesty policy about tools and live data.
-- Response styles (Concise / Balanced / Detailed) and personality modes
-  (TRALIX / JARVIS / Custom).
-- Settings split into General · AI · Voice · Memory · Data · Advanced, with a
-  diagnostics report and a developer debug panel.
-- Projects, chat search across titles *and* message text (with snippets), rename,
-  pin, archive with undo, delete with undo.
-- A tool layer (`assets/js/tools.js`) that describes real capabilities and refuses
-  to fake the ones that are not deployed.
-- Professional error states, keyboard shortcuts (⌘K, ⌘⇧O, ⌘/), a TRALIX status
-  indicator (idle · listening · thinking · generating · speaking · error) and
-  reduced-motion support.
-
----
-
-## Mobile & scroll contract
-
-The layout is built so a long conversation scrolls with a finger on iPhone:
-
-- the document never scrolls; the message column does,
-- no `overflow: hidden` on `html`/`body` in normal use — the lock is reference-counted
-  and only while a drawer or modal is genuinely open, then always released
-  (including on page hide and via a safety valve),
-- no `position: fixed` page locking and no `touch-action: none` on the body,
-- the app is fitted to `visualViewport` (`--vvh` + explicit height), so the keyboard
-  cannot push the composer off screen,
-- `env(safe-area-inset-*)` is respected top and bottom; the composer sits inside the
-  layout, not fixed over it, and never blocks scrolling.
-
----
-
-## Capabilities, honestly
-
-| Capability | State |
-|---|---|
-| Chat with streaming replies | **Available** (needs the backend configured) |
-| Memory, projects, voice, PWA offline shell | **Available** |
-| Web search | **Only** if the backend sets `TRALIX_ENABLE_WEB_SEARCH=true`; otherwise TRALIX says it cannot check live data |
-| Attachments (PDF/TXT/DOCX/images/code) | **Not deployed** — the button explains this instead of pretending |
-| Code execution, calendar, reminders, weather, news | **Not deployed** — listed in the tool layer as unavailable |
-
-`/api/health` is the source of truth: the UI marks a capability available only when
-the backend advertises it.
+The frontend resolves its API base from, in order: a device override saved in the
+app, `window.TRALIX_API_BASE`, `?api=https://…`, `backend.json`, then same origin.
+Diagnostics always reports which one is in use.
 
 ---
 
 ## Testing
 
 ```bash
-npm run check      # syntax, JSON, asset refs, SW shell, secret scan, DOM contract
-npm test           # 121 logic tests (markdown, memory, migration, tools, scroll…)
-npm run verify     # both
-
-npm install --no-save jsdom
-npm run test:dom   # 62 integration checks: boots the real app in jsdom and drives
-                   # send/stream/error/sheets/drawer/search/projects/memory/transport
+npm run check        # syntax, JSON, asset refs, SW shell, secret scan, DOM contract
+npm test             # 121 logic tests (markdown, memory, migration, tools, scroll…)
+npm run test:server  # 286 server tests: backend, routing, runner, tasks, voice, diff
+npm run test:dom     # 131 integration checks (jsdom): boots the real app
+npm run test:studio  # 51 workspace checks (jsdom): areas, honest states, task rules
+npm run verify       # all of the above
 ```
 
-`npm run check` also fails the build if a key-like string, a `chatgpt.com`
-reference, or a frontend call to a provider API is ever committed.
+`npm run test:dom` and `npm run test:studio` need `npm install --no-save jsdom`
+and skip with a message when it is absent. `npm run check` fails the build on a
+key-like string in a browser-shipped file, a `chatgpt.com` reference, a direct
+frontend call to a provider API, or an element id used in JS but missing from
+`index.html`.
 
 ---
 
 ## Project structure
 
 ```
-index.html                     app shell: sidebar, chat, composer, all overlays
-assets/app.css                 design system (tokens, dark/light, mobile-first)
+index.html                     app shell: rail, five areas, composer, task panel, overlays
+assets/app.css                 original design system (tokens, dark/light, mobile-first)
+assets/studio.css              JARVIS STUDIO: workspace, orb, panels, diffs, responsive
 assets/js/
-  app.js                       boot + wiring only
-  config.js                    identity, feature flags, backend URL resolution
-  errors.js                    one error vocabulary → friendly messages
-  store.js                     persistence + migration from the Jarvis build
-  models.js                    TRALIX tiers ↔ provider models
-  personality.js               TRALIX system prompt, styles, memory extraction
-  markdown.js  highlight.js    safe rendering and syntax highlighting
-  tools.js                     tool layer (availability-honest)
-  voice.js                     speech in / speech out (iOS-first)
-  scrolling.js                 viewport fitting + scroll-lock manager
+  app.js                       boot + wiring (including the workspace layer)
+  config.js  errors.js  store.js  models.js  personality.js  markdown.js
+  highlight.js  tools.js  voice.js  scrolling.js
   api/client.js                fetch, timeouts, SSE parsing
-  api/backend.js               TRALIX backend client (default transport)
+  api/backend.js               legacy backend client (/api/chat, /api/health)
   api/local.js                 optional device-only provider transport
-  api/chat.js                  transport selection + request assembly
+  api/chat.js                  transport selection: routed → legacy → device key
+  api/v2.js                    every /api/v2 endpoint
+  ui/nav.js  ui/orb.js         area navigation + the orb state machine
+  views/home.js  projects.js  models.js  settings.js  tasks.js
   ui/…                         sheets, feedback, status, messages, composer, chat,
-                               sidebar, search, memory, projects, models,
-                               settings, doctor
+                               sidebar, search, memory, projects, models, settings
 server/
-  worker.js                    Cloudflare Worker: /api/chat, /api/health, /api/models
+  worker.js                    Cloudflare Worker entry; legacy /api/* + /api/v2/*
   node.js                      Node 18+ adapter (optionally serves the frontend)
-  wrangler.toml  .env.example  deployment config
-sw.js                          offline app shell (API traffic is never cached)
-manifest.webmanifest           PWA metadata (TRALIX AI)
-tests/                         logic tests + jsdom integration test
+  routes.js                    /api/v2 route table
+  router.js                    free-first selection, failover, cost guard
+  providers/*.js               one adapter per vendor
+  github.js  tasks.js  runner.js  diff.js  tts.js  store.js  lib/http.js
+  wrangler.toml  .env.example  README.md
+tests/                         logic, server, voice, jsdom and studio suites + doubles
 tools/check.mjs                static validation / secret scan
+sw.js  manifest.webmanifest    offline shell, PWA metadata
+docs/                          upgrade and studio reports
 ```
 
 ---
 
-## Privacy
+## Privacy and security
 
-- Conversations, memories and settings live in **this browser**. Nothing is uploaded
-  to a TRALIX server; only the messages needed for a reply are sent to the backend,
-  which forwards them to OpenAI and stores nothing.
-- The backend never logs message content, never returns the key, and refuses to run
-  without one rather than pretending.
-- Sensitive content (card numbers, passwords, API keys, IDs) is refused by the memory
-  system even if you ask it to remember them.
-- Exports never include a key.
+- Conversations, memories and UI settings live in **this browser**. Only the
+  messages needed for a reply are sent to the backend, which forwards them to the
+  chosen provider and stores nothing.
+- Provider keys, the GitHub token and the Fish Audio key are **server-side**, in a
+  `0600` file, never in the browser, never in Git, never in logs. Reads return a
+  four-character hint.
+- Key-shaped strings are redacted from every server log line and error payload.
+- Set `JARVIS_WRITE_TOKEN` on any deployment reachable from the internet: every
+  mutating call then requires it.
+- Sensitive content (card numbers, passwords, keys, IDs) is refused by the memory
+  system even when you ask it to remember.
+- Exports never contain a key.
 
 ## Licence
 
