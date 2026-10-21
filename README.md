@@ -254,6 +254,50 @@ Three things Render changes, honestly:
 If you serve the frontend from GitHub Pages instead, drop `--static` from the
 start command, keep the CORS variable, and put the service URL in `backend.json`.
 
+### Vercel (serverless)
+
+`vercel.json` and `api/[...path].js` are ready: import the repo, keep every
+default (Vercel detects no framework, which is correct — the app is static and
+the API is one function), and set the environment variables in
+**Settings → Environment Variables**.
+
+```
+Build:   (none — the app is already static)
+Install: npm install --omit=dev --no-audit --no-fund
+API:     api/[...path].js   → node server/worker.js   (the same fetch handler)
+Limits:  maxDuration 300 s (Hobby maximum), 1024 MB
+```
+
+`api/[...path].js` is an adapter and nothing more: it turns Vercel's Node
+request/response into the `Request`/`Response` pair `server/worker.js` already
+speaks, and streams the answer back chunk by chunk so chat and task events still
+arrive as they happen. No provider, key or route knowledge lives in it.
+
+Four things Vercel changes, honestly:
+
+- **There is no filesystem.** It is read-only apart from `/tmp` (500 MB, per
+  instance). `server/store.js` detects that and falls back to memory, which the
+  UI reports: Home shows *Connected (memory store)* and Settings says
+  *memory store — resets on redeploy*. Settings, task history and keys saved
+  through the interface are per-instance and lost on redeploy. **Put every key
+  in an environment variable instead** — then nothing you care about depends on
+  storage at all.
+- **The sandbox runs inside the function itself.** 2 GB and 1 vCPU on Hobby, and
+  the whole invocation is killed at `maxDuration`. There is no container, so
+  treat permitted checks as best-effort; Settings → Execution reports exactly
+  what the host has (`git` and `node` are present, `docker` is not).
+- **No background work.** One function serves the whole API: no workers, no
+  queues, no long-lived processes.
+- **Smaller platform caps.** Request and response bodies are 4.5 MB (large diffs
+  and file reads can hit that), and runtime logs are kept for 1 hour on Hobby.
+
+`maxDuration` is set to 300 s, the Hobby maximum, only so a long check is not cut
+short; a chat answer is typically a few seconds. Lower it if you would rather
+fail fast.
+
+On Vercel the interface and the API share an origin, so leave `backend.json`
+empty — it only matters when the frontend is hosted somewhere else.
+
 **Connecting them** — put the backend URL in `backend.json` (a public pointer,
 never a key) and push:
 
@@ -305,6 +349,7 @@ assets/js/
   views/home.js  projects.js  models.js  settings.js  tasks.js
   ui/…                         sheets, feedback, status, messages, composer, chat,
                                sidebar, search, memory, projects, models, settings
+api/[...path].js               Vercel adapter: Node req/res → the fetch handler
 server/
   worker.js                    Cloudflare Worker entry; legacy /api/* + /api/v2/*
   node.js                      Node 18+ adapter (optionally serves the frontend)
@@ -316,6 +361,9 @@ server/
 tests/                         logic, server, voice, jsdom and studio suites + doubles
 tools/check.mjs                static validation / secret scan
 sw.js  manifest.webmanifest    offline shell, PWA metadata
+vercel.json  .vercelignore     Vercel deployment (static app + one API function)
+render.json  railway.json      Render / Railway deployment
+backend.json                   public pointer to a backend hosted elsewhere
 docs/                          upgrade and studio reports
 ```
 

@@ -92,7 +92,7 @@ const TIER_MAP = (env) => ({
 
 function corsHeaders(request, env) {
   const origin = request.headers.get('Origin') || '';
-  const allowed = (env.TRALIX_ALLOWED_ORIGINS || '*').split(',').map(s => s.trim()).filter(Boolean);
+  const allowed = String(env.TRALIX_ALLOWED_ORIGINS || env.JARVIS_ALLOWED_ORIGINS || '*').split(',').map(s => s.trim()).filter(Boolean);
   const permit = allowed.includes('*') || allowed.includes(origin);
   return {
     'Access-Control-Allow-Origin': permit ? (allowed.includes('*') ? '*' : origin) : 'null',
