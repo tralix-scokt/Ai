@@ -106,6 +106,74 @@ globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 0);
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 globalThis.window.requestAnimationFrame = globalThis.requestAnimationFrame;
 
+/*
+ * jsdom implements no media playback, so spoken replies are driven through a
+ * stand-in Audio element the test can start and finish by hand.
+ */
+class FakeAudio {
+  static instances = [];
+  constructor(src) {
+    this.src = src;
+    this.playing = false;
+    this.listeners = {};
+    FakeAudio.instances.push(this);
+  }
+  addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }
+  removeEventListener(type, fn) {
+    this.listeners[type] = (this.listeners[type] || []).filter(f => f !== fn);
+  }
+  play() { this.playing = true; return Promise.resolve(); }
+  pause() { this.playing = false; }
+  /** Test helper: the audio finished playing. */
+  finish() { this.playing = false; for (const fn of this.listeners.ended || []) fn(); }
+  fail() { for (const fn of this.listeners.error || []) fn(); }
+}
+globalThis.Audio = FakeAudio;
+window.Audio = FakeAudio;
+
+/*
+ * jsdom implements no speech recognition, so the microphone is driven through a
+ * stand-in that behaves like the Web Speech API: it starts, reports results and
+ * can fail the way a blocked microphone fails.
+ */
+class FakeSpeechRecognition {
+  static instances = [];
+  constructor() {
+    this.lang = '';
+    this.interimResults = false;
+    this.continuous = false;
+    this.maxAlternatives = 1;
+    this.started = 0;
+    this.stopped = 0;
+    FakeSpeechRecognition.instances.push(this);
+  }
+  start() {
+    this.started += 1;
+    setTimeout(() => this.onstart?.(), 0);
+  }
+  stop() {
+    this.stopped += 1;
+    setTimeout(() => this.onend?.(), 0);
+  }
+  abort() {
+    this.stopped += 1;
+    setTimeout(() => this.onend?.(), 0);
+  }
+  /** Test helper: the user said something and it is final. */
+  say(text) {
+    // A real result is array-like with an isFinal flag: [ { transcript }, … ]
+    const result = [{ transcript: text }];
+    result.isFinal = true;
+    this.onresult?.({ resultIndex: 0, results: [result] });
+  }
+  /** Test helper: recognition failed the way a real one does. */
+  failWith(error) {
+    this.onerror?.({ error });
+  }
+}
+window.SpeechRecognition = FakeSpeechRecognition;
+globalThis.SpeechRecognition = FakeSpeechRecognition;
+
 /* ------------------------------ backend.json ------------------------------ */
 // The harness answers ./backend.json so the deployed-frontend path is testable.
 let backendJson = { url: '' };
@@ -114,6 +182,16 @@ let backendJson = { url: '' };
 let fetchMode = 'down';
 let streamedText = '';
 const requests = [];
+const v2Requests = [];
+/** How the mocked deployment answers /api/v2/chat. */
+let v2Mode = 'ok';                  // 'ok' | 'blocked' | 'missing'
+/** Whether the mocked /api/health advertises the routing layer. */
+let healthV2 = false;
+/** 'off' = no voice key on the server, 'server' = Fish Audio configured. */
+let voiceMode = 'off';
+const speechRequests = [];
+/** 'short' or 'long' — a long reply must be split before it is spoken. */
+let replyLength = 'short';
 
 globalThis.fetch = async (url, init = {}) => {
   const target = String(url);
@@ -134,18 +212,76 @@ globalThis.fetch = async (url, init = {}) => {
         provider: 'openai', model: 'gpt-5', tools: [],
         features: { webSearch: false, attachments: false },
         error: 'invalid_config',
-        message: 'TRALIX backend is reachable but OPENAI_API_KEY is not set.',
+        message: 'JARVIS backend is reachable but OPENAI_API_KEY is not set.',
       });
     }
     return jsonResponse({
       ok: true, status: 'ok', reachable: true, configured: true, verified: true,
       provider: 'openai', model: 'gpt-5',
-      tools: ['web_search'], features: { webSearch: true, attachments: false },
+      tools: ['web_search'],
+      features: { webSearch: true, attachments: false, multiProviderRouting: healthV2 },
+      ...(healthV2 ? { jarvis: { api: '/api/v2', studio: true } } : {}),
     });
   }
   if (target.includes('/api/models')) {
     return jsonResponse({ models: { 'tralix-smart': { provider: 'openai', model: 'gpt-5' } } });
   }
+  if (target.includes('/api/v2/chat')) {
+    v2Requests.push({ url: target, body: init.body ? JSON.parse(init.body) : null });
+
+    if (v2Mode === 'missing') {
+      // A deployment that predates the routing layer.
+      return jsonResponse({ error: { code: 'not_found', message: 'Not Found' } }, 404);
+    }
+    if (v2Mode === 'blocked') {
+      // No free model left, and paid usage is not authorised.
+      return jsonResponse({
+        error: {
+          code: 'paid_blocked',
+          message: 'No free model is available right now. Paid providers are configured but you have not authorised paid usage.',
+          requiresPaidPermission: true,
+        },
+      }, 503);
+    }
+
+    const chunks = [
+      { type: 'model', provider: 'gemini', providerLabel: 'Gemini', model: 'gemini-2.5-flash', paid: false },
+      { type: 'delta', text: 'Routed through the free tier.' },
+      { type: 'done', provider: 'gemini', providerLabel: 'Gemini', model: 'gemini-2.5-flash', paid: false, attempts: [] },
+    ];
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+        }
+        controller.close();
+      },
+    });
+    return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+  }
+
+  if (target.includes('/api/v2/voice/status')) {
+    return jsonResponse({
+      provider: 'fish-audio',
+      configured: voiceMode === 'server',
+      keySource: voiceMode === 'server' ? 'environment' : '',
+      keyHint: voiceMode === 'server' ? 'fa-…0001' : '',
+      model: 's2-pro', voiceId: '', format: 'mp3', speed: 1.15, maxChars: 1200,
+    });
+  }
+
+  if (target.includes('/api/v2/voice/speak')) {
+    speechRequests.push({ url: target, body: init.body ? JSON.parse(init.body) : null });
+    if (voiceMode !== 'server') {
+      return jsonResponse({ error: { code: 'invalid_config', message: 'Text-to-speech is not configured.' } }, 503);
+    }
+    return new Response(Buffer.from([0x49, 0x44, 0x33, 0x03]), {
+      status: 200,
+      headers: { 'Content-Type': 'audio/mpeg' },
+    });
+  }
+
   if (target.includes('/api/chat') && fetchMode === 'slow') {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -164,11 +300,14 @@ globalThis.fetch = async (url, init = {}) => {
   }
 
   if (target.includes('/api/chat')) {
-    const chunks = [
-      { type: 'delta', text: '**Bold** answer with code:\n\n```js\nconst x = 2 ** 10;\n```\n' },
-      { type: 'delta', text: '- one\n- two\n' },
-      { type: 'done', model: 'gpt-5' },
-    ];
+    const long = 'This is a sentence long enough to need splitting. '.repeat(40);
+    const chunks = replyLength === 'long'
+      ? [{ type: 'delta', text: long }, { type: 'done', model: 'gpt-5' }]
+      : [
+        { type: 'delta', text: '**Bold** answer with code:\n\n```js\nconst x = 2 ** 10;\n```\n' },
+        { type: 'delta', text: '- one\n- two\n' },
+        { type: 'done', model: 'gpt-5' },
+      ];
     streamedText = chunks.map(c => c.text || '').join('');
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -202,8 +341,8 @@ const lastChatRequest = () => chatRequests().at(-1);
 
 t('boot splash is removed', !$('#boot'));
 t('app is revealed', $('#app') && !$('#app').hidden);
-t('identity is TRALIX AI', $('.brand-text strong').textContent.trim() === 'TRALIX AI');
-t('subtitle present', $('.brand-text small').textContent.includes('Intelligent AI Assistant'));
+t('identity is JARVIS STUDIO', $('.brand-text strong').textContent.trim() === 'JARVIS STUDIO');
+t('subtitle present', $('.brand-text small').textContent.includes('AI Coding Workspace'));
 t('welcome screen asks what to do', $('#welcomeQuestion').textContent.includes('What can I help you accomplish?'));
 t('starter cards rendered', $$('#starterGrid .starter').length === 5, String($$('#starterGrid .starter').length));
 t('no vendor branding in the product chrome', (() => {
@@ -216,7 +355,7 @@ t('provider names appear only in Advanced settings (developer surface)', (() => 
   const advanced = $('[data-section="advanced"]').textContent;
   return !/gemini/i.test(prior) && /Gemini/i.test(advanced);
 })(), '');
-t('composer placeholder', $('#composer-input').placeholder === 'Message TRALIX…');
+t('composer placeholder', $('#composer-input').placeholder === 'Message JARVIS…');
 t('composer starts disabled', $('#btnSend').disabled === true);
 
 console.log('\n— backend down (honest error state) —');
@@ -266,7 +405,7 @@ t('code block rendered with language label', lastBot?.querySelector('.code-lang'
 t('code block has a copy button', Boolean(lastBot?.querySelector('[data-copy-target]')));
 t('code is syntax highlighted', Boolean(lastBot?.querySelector('.tok-key')));
 t('request carried the TRALIX tier, not a vendor model', lastChatRequest()?.body?.model === 'tralix-smart', JSON.stringify(lastChatRequest()?.body?.model));
-t('system instructions sent with the request', (lastChatRequest()?.body?.instructions || '').includes('TRALIX AI'));
+t('system instructions sent with the request', (lastChatRequest()?.body?.instructions || '').includes('JARVIS'));
 t('composer cleared after a successful send', $('#composer-input').value === '');
 t('response actions available', [...$$('.msg-actions .act')].map(b => b.textContent).join(' ').includes('Copy'));
 t('more menu offers follow-ups', [...$$('.more-menu button')].some(b => b.textContent === 'Shorter'));
@@ -308,10 +447,76 @@ t('follow-up is not rendered as a user message',
   $$('.msg-user').length === usersBeforeFollowUp,
   `${$$('.msg-user').length} vs ${usersBeforeFollowUp}`);
 
+console.log('\n— free-first routing —');
+{
+  // Imported here (not at the top) so the section can stand on its own; the
+  // later transport section imports the same module under a different name.
+  const ChatApi = await import('../assets/js/api/chat.js');
+  const send = async (text) => {
+    $('#composer-input').value = text;
+    $('#composer-input').dispatchEvent(new window.Event('input', { bubbles: true }));
+    $('#composer').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await flush(150);
+  };
+  const lastBot = () => $$('.msg-bot').at(-1);
+
+  // The deployment advertises /api/v2, so ordinary chat must be routed.
+  healthV2 = true;
+  v2Mode = 'ok';
+  await ChatApi.refreshCapabilities({ force: true });
+  const legacyBefore = chatRequests().length;
+
+  await send('Explain closures like I am five');
+
+  t('chat is routed through /api/v2 when the backend offers it', v2Requests.length === 1,
+    `${v2Requests.length} v2 requests`);
+  t('the routed request carries the JARVIS tier, not a vendor model',
+    v2Requests[0]?.body?.tier === 'smart', JSON.stringify(v2Requests[0]?.body?.tier));
+  t('the client never asks for a paid provider', v2Requests[0]?.body?.allowPaid !== true);
+  t('the legacy single-provider endpoint was not used', chatRequests().length === legacyBefore,
+    `${legacyBefore} → ${chatRequests().length}`);
+  t('the routed reply is rendered', /Routed through the free tier/.test(lastBot()?.textContent || ''),
+    (lastBot()?.textContent || '').slice(0, 80));
+  t('the reply names the provider that actually answered',
+    /Gemini/.test(lastBot()?.querySelector('.msg-model')?.textContent || ''),
+    lastBot()?.querySelector('.msg-model')?.textContent);
+
+  // No silent paid switching: a routing block is reported, never downgraded
+  // onto the legacy key.
+  v2Mode = 'blocked';
+  await send('Write me a sonnet about TypeScript');
+  t('a blocked paid request is not silently retried on the legacy key',
+    chatRequests().length === legacyBefore, `${legacyBefore} → ${chatRequests().length}`);
+  t('the block is shown to the user as an error', Boolean($$('.msg-bot.msg-error').at(-1)));
+  t('and it says why', /free model|paid usage/i.test($$('.msg-bot.msg-error').at(-1)?.textContent || ''),
+    ($$('.msg-bot.msg-error').at(-1)?.textContent || '').slice(0, 120));
+
+  // A deployment without /api/v2 still works: only that case falls back.
+  v2Mode = 'missing';
+  await send('Are you still there?');
+  t('a deployment without /api/v2 falls back to /api/chat', chatRequests().length > legacyBefore,
+    `${legacyBefore} → ${chatRequests().length}`);
+  t('and the fallback still answers',
+    /Bold/.test($$('.msg-bot:not(.msg-error)').at(-1)?.textContent || ''));
+
+  healthV2 = false;
+  v2Mode = 'ok';
+  await ChatApi.refreshCapabilities({ force: true });
+}
+
 console.log('\n— sheets, drawer and scroll lock —');
 const lockCount = async () => (await import('../assets/js/scrolling.js')).scrollLockCount();
+const { openSheet } = await import('../assets/js/ui/sheets.js');
 
+// Settings is a workspace area of its own now. The classic sheet (advanced
+// provider/voice options) is opened from that area, so both paths are checked.
 $('#btnSettings').dispatchEvent(new window.Event('click', { bubbles: true }));
+await flush(40);
+t('settings button opens the Settings area',
+  !$('#view-settings').hidden && $('#viewTitle').textContent === 'Settings');
+t('the Settings area offers the classic advanced sheet', Boolean($('#btnOpenClassicSettings')));
+
+openSheet('settingsSheet');
 await flush(40);
 t('settings sheet opens', !$('#settingsSheet').hidden);
 t('scroll lock engaged while open', (await lockCount()) > 0, String(await lockCount()));
@@ -330,7 +535,7 @@ t('scroll lock released on close', (await lockCount()) === 0, String(await lockC
 $('#btnModel').dispatchEvent(new window.Event('click', { bubbles: true }));
 await flush(40);
 t('model picker opens', !$('#modelSheet').hidden);
-t('four TRALIX tiers offered', $$('#modelList .model-opt').length === 4);
+t('four JARVIS tiers offered', $$('#modelList .model-opt').length === 4);
 t('provider names hidden from the picker', !$('#modelList').textContent.includes('gpt-'), $('#modelList').textContent.slice(0, 80));
 t('capability list is honest about attachments',
   $('#capabilityList').textContent.includes('Unavailable'), $('#capabilityList').textContent);
@@ -379,7 +584,7 @@ t('no stylesheet rule locks the document body',
   'body { overflow: hidden } found in app.css');
 
 // Open and close a sheet as well: the same guarantee must hold for both layers.
-$('#btnSettings').dispatchEvent(new window.Event('click', { bubbles: true }));
+openSheet('settingsSheet');
 await flush(60);
 t('a sheet locks scrolling while it is open', document.body.style.overflow === 'hidden',
   JSON.stringify(document.body.style.overflow));
@@ -389,7 +594,7 @@ t('body scrolling is restored after a sheet closes', document.body.style.overflo
   JSON.stringify(document.body.style.overflow));
 
 // Nesting: two overlays open, one closes — the page stays locked until the last.
-$('#btnSettings').dispatchEvent(new window.Event('click', { bubbles: true }));
+openSheet('settingsSheet');
 await flush(60);
 $('#btnMemory').dispatchEvent(new window.Event('click', { bubbles: true }));
 await flush(80);
@@ -588,6 +793,178 @@ console.log('\n— backend URL resolution (GitHub Pages deployment) —');
 
   backendJson = { url: '' };
   window.history.replaceState({}, '', restoreSearch || '/Ai/');
+}
+
+console.log('\n— spoken replies —');
+{
+  const store = await import('../assets/js/store.js');
+
+  // Driven through the real controls, so the app's own settings state changes.
+  const setToggle = (id, value) => {
+    const el = $(id);
+    el.checked = value;
+    el.dispatchEvent(new window.Event('change', { bubbles: true }));
+  };
+  setToggle('#setVoiceAuto', true);
+  t('auto-speak also enables voice output', store.loadSettings().voice.enabled === true);
+
+  const sendUi = async (text) => {
+    $('#composer-input').value = text;
+    $('#composer-input').dispatchEvent(new window.Event('input', { bubbles: true }));
+    $('#composer').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await flush(200);
+  };
+
+  // jsdom offers no speech synthesis, so the device voice is genuinely absent
+  // here — which makes this a clean test of the server path and its fallback.
+  const deviceVoiceAvailable = 'speechSynthesis' in window;
+  t('the test environment has no device voice (the server path is under test)', !deviceVoiceAvailable);
+
+  /** Play every piece of audio the app asks for, as a real browser would. */
+  const pumpAudio = async (max = 60) => {
+    for (let i = 0; i < max; i += 1) {
+      await flush(15);
+      const playing = FakeAudio.instances.find(a => a.playing);
+      if (playing) { playing.finish(); continue; }
+      if (speechRequests.length && i > 3) return;
+    }
+  };
+
+  voiceMode = 'off';
+  replyLength = 'short';
+  speechRequests.length = 0;
+  FakeAudio.instances.length = 0;
+  await sendUi('Say hello');
+  t('with no voice key on the server nothing is sent to be spoken',
+    speechRequests.length === 0, String(speechRequests.length));
+  t('and nothing was handed to a player', FakeAudio.instances.length === 0);
+
+  // Adding a key in Settings → Voice tells the assistant to re-check.
+  voiceMode = 'server';
+  window.dispatchEvent(new window.CustomEvent('jarvis:voice-changed'));
+  replyLength = 'long';
+  speechRequests.length = 0;
+  FakeAudio.instances.length = 0;
+  await sendUi('Explain the plan in detail');
+  await pumpAudio();
+
+  const pieces = speechRequests.map(r => r.body?.text || '');
+  t('a reply longer than the provider allows is split into pieces',
+    pieces.length > 1, `${pieces.length} piece(s)`);
+  t('no piece exceeds the server limit',
+    pieces.every(piece => piece.length <= 1100),
+    pieces.map(p => p.length).join(', '));
+  t('nothing is dropped: the pieces carry the whole reply',
+    pieces.join(' ').length > 1900, String(pieces.join(' ').length));
+  t('the pieces begin where the reply begins',
+    pieces[0].startsWith('This is a sentence long enough to need splitting.'), pieces[0].slice(0, 60));
+  t('no piece is empty', pieces.every(p => p.trim().length > 0));
+  t('the speaking speed is sent with every piece',
+    speechRequests.length > 0 && speechRequests.every(r => r.body?.speed === 1.15),
+    String(speechRequests.map(r => r.body?.speed)));
+
+  // Stop mid-reply: the audio must actually stop, and nothing further is fetched.
+  speechRequests.length = 0;
+  FakeAudio.instances.length = 0;
+  await sendUi('Another long answer, please');
+  await flush(60);
+  t('a piece is playing', FakeAudio.instances.some(a => a.playing));
+
+  const stopButton = $$('.msg-actions [data-role="speak"]').at(-1);
+  t('the speaking message offers Stop', /Stop/.test(stopButton?.textContent || ''),
+    stopButton?.textContent);
+  if (stopButton) stopButton.dispatchEvent(new window.Event('click', { bubbles: true }));
+  await flush(150);
+  const atStop = speechRequests.length;
+  await pumpAudio();
+
+  t('Stop ends the audio instead of leaving it pending',
+    !FakeAudio.instances.some(a => a.playing));
+  t('no further audio is requested after Stop',
+    speechRequests.length === atStop, `${atStop} → ${speechRequests.length}`);
+  t('the status returns to idle after speaking', $('#statusSidebar').dataset.state === 'idle',
+    $('#statusSidebar').dataset.state);
+
+  // A failure halfway through is reported, not silently switched to another voice.
+  speechRequests.length = 0;
+  FakeAudio.instances.length = 0;
+  await sendUi('One more long answer');
+  await flush(60);
+  FakeAudio.instances.find(a => a.playing)?.finish();
+  await flush(40);
+  FakeAudio.instances.find(a => a.playing)?.fail();       // the second piece fails
+  await flush(60);
+  t('a broken player is reported rather than ignored',
+    /stopped/i.test($('#toast')?.textContent || ''), ($('#toast')?.textContent || '').slice(0, 80));
+
+  setToggle('#setVoiceAuto', false);
+  t('auto-speak can be turned off again', store.loadSettings().voice.auto === false);
+  voiceMode = 'off';
+  replyLength = 'short';
+}
+
+console.log('\n— microphone —');
+{
+  const mic = $('#btnMic');
+  const tap = () => mic.dispatchEvent(new window.Event('click', { bubbles: true }));
+  const live = () => FakeSpeechRecognition.instances.at(-1);
+  const reset = () => { FakeSpeechRecognition.instances.length = 0; };
+  const thread = () => $('#chatScroll')?.textContent || '';
+
+  reset();
+  tap();
+  await flush(60);
+  t('the microphone starts recognising', Boolean(live()) && live().started >= 1);
+  t('the interface says it is listening', $('#voiceState').hidden === false);
+  t('the mic button reports that it is recording', mic.getAttribute('aria-pressed') === 'true');
+
+  live().say('deploy the api');
+  await flush(30);
+  t('speech is shown while it is recognised',
+    ($('#voiceLabel').textContent || '').includes('deploy the api'), $('#voiceLabel').textContent);
+
+  tap();                                   // tap again to stop
+  await flush(150);
+  t('the listening bar is dismissed when the mic stops', $('#voiceState').hidden === true);
+  t('the mic button stops reporting recording', mic.getAttribute('aria-pressed') === 'false');
+  t('the dictation was sent as a message', /deploy the api/.test(thread()));
+
+  // A blocked microphone: the failure is reported and nothing is left stuck.
+  reset();
+  tap();
+  await flush(60);
+  live().failWith('not-allowed');
+  await flush(60);
+  t('a blocked microphone is reported, not hidden',
+    /Microphone access is blocked/.test($('#toast')?.textContent || ''), ($('#toast')?.textContent || '').slice(0, 60));
+  t('the listening bar is dismissed after an error', $('#voiceState').hidden === true);
+  t('the mic button is not left in the recording state', mic.getAttribute('aria-pressed') === 'false');
+  t('an error does not also claim nothing was heard',
+    !/Did not catch that/.test($('#toast')?.textContent || ''), ($('#toast')?.textContent || '').slice(0, 60));
+
+  // The next tap must start listening — not just clear a stuck flag.
+  reset();
+  tap();
+  await flush(60);
+  t('the next tap starts listening again', Boolean(live()) && live().started >= 1);
+  tap();                                   // stop it again, through the UI
+  await flush(120);
+  t('stopping through the mic button clears the recording state',
+    mic.getAttribute('aria-pressed') === 'false');
+
+  // Dictation adds to what the user had already typed; it must not replace it.
+  reset();
+  $('#composer-input').value = 'explain this:';
+  $('#composer-input').dispatchEvent(new window.Event('input', { bubbles: true }));
+  tap();
+  await flush(60);
+  live().say('why is the build red');
+  await flush(30);
+  tap();
+  await flush(150);
+  t('dictation is added to an existing draft, not substituted for it',
+    /explain this:/.test(thread()) && /why is the build red/.test(thread()),
+    thread().slice(-120));
 }
 
 console.log('\n— errors during the run —');

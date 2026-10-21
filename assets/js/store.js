@@ -70,6 +70,13 @@ export const DEFAULT_SETTINGS = {
 
   onboarded: false,
   sidebarCollapsed: false,
+
+  /* JARVIS STUDIO workspace */
+  view: 'assistant',            // last open area — Home · Projects · Assistant · Models · Settings
+  taskMode: false,
+  studio: {
+    autonomy: '',               // '' = use the server default
+  },
 };
 
 /* ------------------------------- low level ------------------------------- */
@@ -249,7 +256,7 @@ export const MEMORY_CATEGORIES = [
   { id: 'personal', label: 'Personal', hint: 'Name, location, role, family' },
   { id: 'preferences', label: 'Preferences', hint: 'How you like things done' },
   { id: 'projects', label: 'Projects', hint: 'Things you are working on' },
-  { id: 'instructions', label: 'Instructions', hint: 'Standing rules for TRALIX' },
+  { id: 'instructions', label: 'Instructions', hint: 'Standing rules for JARVIS' },
   { id: 'other', label: 'Other', hint: 'Everything else' },
 ];
 
@@ -492,7 +499,7 @@ export function exportAll() {
 }
 
 export function importAll(data) {
-  if (!data || typeof data !== 'object') throw new Error('Not a TRALIX backup');
+  if (!data || typeof data !== 'object') throw new Error('Not a JARVIS backup');
   const legacySettings = data.app === 'jarvis' ? { ...data.settings, apiKey: '' } : data.settings;
   const current = loadSettings();
 

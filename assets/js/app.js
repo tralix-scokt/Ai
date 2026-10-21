@@ -1,5 +1,5 @@
 /* ==========================================================================
-   app.js — TRALIX AI boot and wiring.
+   app.js — JARVIS STUDIO boot and wiring.
 
    This file only assembles modules: state, persistence, transport, voice and
    the UI pieces live in their own files. Nothing here talks to a provider
@@ -26,6 +26,15 @@ import { createModelPicker } from './ui/models.js';
 import { createSettings } from './ui/settings.js';
 import { createComposer } from './ui/composer.js';
 import { createChatController } from './ui/chat.js';
+
+import { createNav } from './ui/nav.js';
+import { bindOrbs, setOrbState, onOrbState } from './ui/orb.js';
+import { createHomeView } from './views/home.js';
+import { createProjectsView } from './views/projects.js';
+import { createModelsView } from './views/models.js';
+import { createSettingsView } from './views/settings.js';
+import { createTaskPanel } from './views/tasks.js';
+import * as V2 from './api/v2.js';
 
 /* ================================= state ================================= */
 const state = {
@@ -78,23 +87,27 @@ function persistChat() {
 /* ================================= voice ================================== */
 const listener = new Voice.Listener({
   onResult: (text) => {
-    setStatus('listening');
+    setStudioStatus('listening');
     $('#voiceLabel').textContent = text ? text : 'Listening…';
   },
   onError: (message) => {
     toast(message, { tone: 'error', ms: 4200 });
-    setVoiceBar(null);
-    setStatus('idle');
+    // Recognition can die on its own (permission denied, no microphone, a
+    // network hiccup). Clear the UI here too: otherwise the button stays stuck
+    // in its recording state and the next tap only unsticks it.
+    endListening();
   },
   onStart: () => {
     setVoiceBar({ state: 'listening', label: 'Listening…', hint: 'tap the mic again to stop' });
   },
   onEnd: (finalText) => {
-    setVoiceBar(null);
-    setStatus('idle');
-    composer.setRecording(false);
-    if (finalText && finalText.trim().length > 1) {
-      composer.setValue(finalText.trim(), { focus: false });
+    endListening();
+    const said = String(finalText || '').trim();
+    if (said.length > 1) {
+      // Dictation adds to whatever the user had already drafted — it must never
+      // replace it, because that text is not recoverable.
+      if (composer.value.trim()) composer.append(said);
+      else composer.setValue(said, { focus: false });
       composer.el.form.requestSubmit();
     } else {
       toast('Did not catch that — try again', { ms: 2000 });
@@ -104,16 +117,21 @@ const listener = new Voice.Listener({
 
 let listening = false;
 
+/** Leave the listening state: bar, button, orb and flag all at once. */
+function endListening() {
+  listening = false;
+  composer.setRecording(false);
+  setVoiceBar(null);
+  setStudioStatus('idle');
+}
+
 function toggleListening() {
   if (!Voice.sttSupported) {
     toast('Voice input needs Safari on iPhone or Chrome on Android.', { ms: 3600, tone: 'error' });
     return;
   }
   if (listening) {
-    listener.stop();
-    listening = false;
-    composer.setRecording(false);
-    setVoiceBar(null);
+    listener.stop();          // onEnd clears the rest of the state
     return;
   }
   Voice.stopSpeaking();
@@ -188,9 +206,9 @@ const sidebar = createSidebar({
   onOpenChat: (id) => chat.openChat(id),
   onNewChat: () => chat.newChat(),
   onOpenSearch: () => search.open(),
-  onOpenProjects: () => { projects.render(); openSheet('projectsSheet'); },
+  onOpenProjects: () => { projects.render(); },
   onOpenMemory: () => { memoryManagerSheet.refresh(); openSheet('memorySheet'); },
-  onOpenSettings: () => settingsUi.open('general'),
+  onOpenSettings: () => nav.go('settings'),
   onOpenConnect: () => openConnect(),
   onChatsChanged: () => { sidebar.render(); sidebar.refreshCounts(); },
   onOpenModel: () => modelPicker.open(),
@@ -205,7 +223,7 @@ const projects = createProjects({
 });
 
 const composer = createComposer({
-  onSubmit: (text) => chat.send(text),
+  onSubmit: (text) => handleSubmit(text),
   onStop: () => chat.stopStreaming(),
   onMic: () => toggleListening(),
   onAttach: () => openAttachments(),
@@ -231,28 +249,146 @@ const chat = createChatController({
   },
 });
 
+/* ============================ workspace layer ============================
+   Five areas share one shell. Views stay mounted, so a stream keeps running
+   while you read a diff, and each view refreshes its own data when shown.
+   ========================================================================== */
+
+const nav = createNav({
+  getSettings: () => state.settings,
+  saveSettings,
+  onChange: (view) => refreshView(view),
+});
+
+const home = createHomeView({
+  nav,
+  onOpenTask: (id) => { nav.go('assistant'); taskPanel.openTask(id); },
+});
+
+const projectsView = createProjectsView({
+  nav,
+  onOpenTask: (id) => { nav.go('assistant'); taskPanel.openTask(id); },
+});
+
+const modelsView = createModelsView({ nav });
+const settingsView = createSettingsView({ nav, settingsUi });
+
+const taskPanel = createTaskPanel({
+  nav,
+  onChanged: () => { home.refreshTasks(); projectsView.refreshRepoTasks(); },
+});
+
+function refreshView(view) {
+  switch (view) {
+    case 'home': home.refresh(); break;
+    case 'projects': projectsView.refresh(); break;
+    case 'models': modelsView.refresh(); break;
+    case 'settings': settingsView.refresh(); break;
+    case 'assistant':
+      if (window.matchMedia('(min-width: 900px)').matches) composer.focus();
+      break;
+    default: break;
+  }
+}
+
+/**
+ * A message is either a conversation turn or a coding task. The toggle in the
+ * composer decides — JARVIS never guesses and never silently edits a repo.
+ */
+async function handleSubmit(text) {
+  const taskMode = $('#taskMode')?.checked;
+  if (!taskMode) {
+    chat.send(text);
+    return;
+  }
+
+  const selection = projectsView.selection;
+  if (!selection.repo) {
+    toast('Choose a repository in Projects first', { tone: 'error', ms: 4200 });
+    nav.go('projects');
+    return;
+  }
+  await taskPanel.start({
+    prompt: text,
+    repo: selection.repo,
+    branch: selection.branch,
+    autonomy: state.settings.studio?.autonomy || '',
+  });
+}
+
+window.addEventListener('jarvis:focus-task', () => {
+  nav.go('assistant');
+  const toggle = $('#taskMode');
+  if (toggle) toggle.checked = true;
+  syncTaskLauncher();
+  composer.focus();
+});
+
+window.addEventListener('jarvis:open-chat', (event) => {
+  const id = event.detail?.id;
+  if (id) chat.openChat(id);
+});
+
+window.addEventListener('jarvis:github-connected', () => {
+  refreshView('projects');
+  refreshView('home');
+});
+
+/** Keep the coding-task hint honest about which repository will be used. */
+function syncTaskLauncher() {
+  const hint = $('#taskLauncherHint');
+  if (!hint) return;
+  const { repo, branch } = projectsView.selection;
+  hint.textContent = repo
+    ? `JARVIS will work on ${repo}${branch ? ` @ ${branch}` : ''}, on its own branch. Nothing is committed until you approve the diff.`
+    : 'No repository selected — open Projects and choose one first.';
+}
+
+$('#taskMode')?.addEventListener('change', syncTaskLauncher);
+
+/** The orb label follows the shared orb state. */
+onOrbState((value, label) => {
+  const text = $('#orbStateText');
+  if (text) text.textContent = label;
+});
+
 /* ============================== chrome bits ============================== */
 $('#btnModel')?.addEventListener('click', () => modelPicker.open());
-$('#btnNavModel')?.addEventListener('click', () => modelPicker.open());
 
 function updateModelChip() {
   const label = modelLabel(state.settings.model);
   const chip = $('#chipLabel');
   if (chip) chip.textContent = label;
-  const nav = $('#navModelLabel');
-  if (nav) nav.textContent = label;
+}
+
+/**
+ * One status for both indicator systems: the small ring in the rail and the
+ * orb. They can never disagree because they are set from the same call.
+ */
+const ORB_FOR_STATUS = {
+  idle: 'idle',
+  listening: 'listening',
+  thinking: 'thinking',
+  generating: 'thinking',
+  speaking: 'speaking',
+  error: 'error',
+};
+
+function setStudioStatus(status, opts = {}) {
+  setStatus(status, opts);
+  setOrbState(ORB_FOR_STATUS[status] || 'idle');
 }
 
 /**
  * Connection state is separate from the activity indicator: the ring shows what
- * TRALIX is doing right now, `connText` says whether a backend is actually able
+ * JARVIS is doing right now, `connText` says whether a backend is actually able
  * to answer. Six honest states — never a vague "offline" when the truth is
  * "the server has no key".
  */
 export const CONNECTION_TEXT = {
   checking: 'Checking backend…',
-  ready: 'TRALIX backend · connected',
-  busy: 'TRALIX backend · rate limited',
+  ready: 'JARVIS backend · connected',
+  busy: 'JARVIS backend · rate limited',
   unconfigured: 'Backend has no API key',
   unauthorized: 'Backend key rejected',
   unreachable: 'Backend unreachable',
@@ -349,18 +485,18 @@ function describeHealth(health) {
       return {
         ok: true,
         line: `Connected · ${health.provider || 'openai'}${health.model ? ` · ${health.model}` : ''}${health.latencyMs ? ` · ${health.latencyMs}ms` : ''}`,
-        explain: `TRALIX verified the connection to the AI service at ${where}. Messages are sent to the backend for a reply and are not stored on the server.`,
+        explain: `JARVIS verified the connection to the AI service at ${where}. Messages are sent to the backend for a reply and are not stored on the server.`,
       };
     case 'busy':
-      return { ok: true, line: 'Rate limited, but the backend is configured', explain: health.message || 'The AI service is throttling this key. TRALIX will retry shortly.' };
+      return { ok: true, line: 'Rate limited, but the backend is configured', explain: health.message || 'The AI service is throttling this key. JARVIS will retry shortly.' };
     case 'unconfigured':
-      return { ok: false, line: 'Backend reachable · no API key set', explain: 'The TRALIX backend answered but has no OPENAI_API_KEY. Set it as a server secret (server/README.md) — the key never belongs in this frontend.' };
+      return { ok: false, line: 'Backend reachable · no API key set', explain: 'The JARVIS backend answered but has no OPENAI_API_KEY. Set it as a server secret (server/README.md) — the key never belongs in this frontend.' };
     case 'unauthorized':
       return { ok: false, line: 'Backend reachable · the key was rejected', explain: 'The AI service rejected the server key. Check OPENAI_API_KEY on the backend.' };
     case 'upstream':
-      return { ok: false, line: 'Backend reachable · AI service unreachable', explain: 'The TRALIX backend is up but cannot reach the AI service from its network. Check OPENAI_BASE_URL or the provider status.' };
+      return { ok: false, line: 'Backend reachable · AI service unreachable', explain: 'The JARVIS backend is up but cannot reach the AI service from its network. Check OPENAI_BASE_URL or the provider status.' };
     default:
-      return { ok: false, line: 'No response from the backend', explain: 'This app needs the TRALIX backend to be reachable. The backend holds the OpenAI key — it is never present in this frontend. Deploy server/ and paste its URL below.' };
+      return { ok: false, line: 'No response from the backend', explain: 'This app needs the JARVIS backend to be reachable. The backend holds the OpenAI key — it is never present in this frontend. Deploy server/ and paste its URL below.' };
   }
 }
 
@@ -396,7 +532,7 @@ $('#btnConnectSave')?.addEventListener('click', async () => {
   statusEl.className = `status-line ${view.ok ? 'ok' : 'bad'}`;
   $('#connectExplanation').textContent = view.explain;
   modelPicker.render();
-  toast(view.ok ? 'TRALIX connected' : view.line, { tone: view.ok ? 'success' : 'error' });
+  toast(view.ok ? 'JARVIS connected' : view.line, { tone: view.ok ? 'success' : 'error' });
 });
 
 $('#btnConnectDoctor')?.addEventListener('click', () => { closeSheet('connectSheet'); settingsUi.openDoctor(); });
@@ -459,18 +595,19 @@ for (const button of document.querySelectorAll('#starterGrid .starter')) {
   button.addEventListener('click', () => {
     const prompt = STARTER_PROMPTS[button.dataset.starter] ?? '';
     composer.setValue(prompt);
-    if (!prompt) toast('Ask TRALIX anything', { ms: 1600 });
+    if (!prompt) toast('Ask JARVIS anything', { ms: 1600 });
   });
 }
 
 /* ============================== lifecycle ================================ */
 window.addEventListener('offline', () => {
   setError('You are offline');
-  toast('You are offline — TRALIX will not be able to reply', { tone: 'error' });
+  setOrbState('offline');
+  toast('You are offline — JARVIS will not be able to reply', { tone: 'error' });
 });
 
 window.addEventListener('online', () => {
-  setStatus('idle');
+  setStudioStatus('idle');
   refreshHealth({ force: true });          // the backend may be back with us
   toast('Back online', { tone: 'success' });
 });
@@ -520,6 +657,10 @@ async function init() {
   settingsUi.refresh?.();
   chat.render();
 
+  bindOrbs(document);
+  nav.restore();
+  syncTaskLauncher();
+
   composer.sync();
   composer.resize();
 
@@ -547,7 +688,10 @@ async function init() {
   setTimeout(async () => {
     await loadBackendConfig();
     updateConnText();
-    const health = await refreshHealth({ force: true });
+    const [health] = await Promise.all([
+      refreshHealth({ force: true }),
+      home.refresh().catch(() => null),
+    ]);
     modelPicker.render();
     settingsUi.refreshDebug?.();
     if (health.ok) Api.syncModelMapping().then(() => settingsUi.refresh?.());
@@ -591,5 +735,5 @@ if ('serviceWorker' in navigator) {
 init().catch((err) => {
   console.error('[tralix] boot failed', err);
   const boot = document.getElementById('boot');
-  if (boot) boot.textContent = 'TRALIX AI could not start. Reload the page.';
+  if (boot) boot.textContent = 'JARVIS STUDIO could not start. Reload the page.';
 });

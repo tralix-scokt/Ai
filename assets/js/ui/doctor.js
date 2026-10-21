@@ -108,7 +108,7 @@ export function collectDiagnostics({ settings, health }) {
 
   rows.push({
     label: 'Web search',
-    detail: FEATURES.webSearch ? 'enabled by the backend' : 'unavailable — TRALIX will say so rather than guess',
+    detail: FEATURES.webSearch ? 'enabled by the backend' : 'unavailable — JARVIS will say so rather than guess',
     state: FEATURES.webSearch ? 'ok' : 'warn',
   });
 

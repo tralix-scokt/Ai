@@ -146,7 +146,7 @@ export function createSettings(deps) {
     const custom = settings.personality === 'custom';
     $('#personaInput').disabled = false;
     $('#personaInput').placeholder = custom
-      ? 'Describe how TRALIX should talk to you'
+      ? 'Describe how JARVIS should talk to you'
       : 'Switch to Custom to write your own instructions';
   }
 
@@ -180,7 +180,7 @@ export function createSettings(deps) {
     select.value = settings.voice.voiceURI || '';
 
     const note = $('#voiceSupportNote');
-    if (!Voice.ttsSupported) note.textContent = 'This browser cannot speak text aloud.';
+    if (!Voice.ttsSupported) note.textContent = 'This browser has no built-in voices. JARVIS can still speak through the server voice — add a provider key under Settings → Voice.';
     else if (!voices.length) note.textContent = 'Voices load after the first tap on iOS — reopen Settings if the list is empty.';
     else note.textContent = `${voices.length} voices available on this device.`;
   }
@@ -251,7 +251,7 @@ export function createSettings(deps) {
     });
 
     $('#btnTestVoice').addEventListener('click', () => {
-      if (!Voice.ttsSupported) { toast('This browser cannot speak.', { tone: 'error' }); return; }
+      if (!Voice.ttsSupported) { toast('This browser has no built-in voices. Use Test voice under Settings → Voice to try the server voice.', { tone: 'error' }); return; }
       const settings = getSettings();
       Voice.speak(`Hello. I am ${APP.name}. Ready when you are.`, {
         voiceURI: settings.voice.voiceURI,
@@ -319,7 +319,7 @@ export function createSettings(deps) {
         onDataReplaced();
         toast('Backup imported', { tone: 'success' });
       } catch (err) {
-        toast('That file is not a TRALIX backup', { tone: 'error' });
+        toast('That file is not a JARVIS backup', { tone: 'error' });
         console.warn('[tralix] import failed', err);
       }
     });
@@ -392,7 +392,7 @@ export function createSettings(deps) {
     $('#advLocalBlock').hidden = settings.advanced.transport !== 'local';
     hint.textContent = settings.advanced.transport === 'local'
       ? 'Requests go straight from this device to the provider. Your key stays in this browser — but it is exposed to the client, so only use this with a key you control.'
-      : 'Recommended. The key lives on the TRALIX server and never reaches this app.';
+      : 'Recommended. The key lives on the JARVIS server and never reaches this app.';
   }
 
   function wireAdvanced() {
@@ -423,7 +423,7 @@ export function createSettings(deps) {
       settings.advanced.transport = event.target.value;
       saveSettings(settings);
       syncAdvanced();
-      toast(event.target.value === 'local' ? 'Using your own key on this device' : 'Using the TRALIX backend');
+      toast(event.target.value === 'local' ? 'Using your own key on this device' : 'Using the JARVIS backend');
     });
 
     $('#advProvider').addEventListener('change', (event) => {

@@ -138,7 +138,12 @@ for (const file of scannable) {
     let match;
     while ((match = re.exec(text)) !== null) {
       const hit = match[0];
-      if (isTemplate && /your-key|sk-\.\.\.|sk-your|example/i.test(hit)) continue;
+      // A documented template may legitimately show the *shape* of a secret
+      // ("paste the PEM here", "your-key-here") as long as the value itself is
+      // a placeholder. Judge the whole line, because the placeholder markers
+      // usually sit after the match ("-----BEGIN...-----\\n...\\n").
+      const line = text.slice(0, match.index).split('\n').pop() + text.slice(match.index).split('\n')[0];
+      if (isTemplate && /your[-_ ]?key|paste|replace|example|placeholder|sk-\.\.\.|sk-your|\.\.\.|\*\*\*/i.test(line)) continue;
       if (isTemplate || isTestFixture(rel)) {
         const value = hit.split(/[:=]\s*/).pop().replace(/^["']/, '');
         if (FAKE_KEY.test(value)) continue;

@@ -16,6 +16,7 @@ import { needsLiveInfo } from '../tools.js';
 import * as Store from '../store.js';
 import * as Voice from '../voice.js';
 import * as Api from '../api/chat.js';
+import * as V2 from '../api/v2.js';
 import { isNearBottom, scrollToEnd } from '../scrolling.js';
 import { messageNode, updateMessageBody, dayDivider, closeAllMoreMenus } from './messages.js';
 import { toast } from './feedback.js';
@@ -73,6 +74,15 @@ export function createChatController(deps) {
     syncJumpButton();
   }
 
+  /*
+   * Whether the server has a voice configured is cached briefly, not forever:
+   * a key can be added in Settings → Voice while the app is open, and the next
+   * reply should use it without a reload. "Not configured" is trusted for a
+   * shorter time than "configured", because that is the answer that changes.
+   */
+  const VOICE_TTL_MS = { configured: 300_000, unconfigured: 30_000 };
+  let voiceLookup = { value: null, at: 0 };
+
   function contextFor(msg, index, messages) {
     const visible = messages.filter(m => !m.hidden);
     const isLast = visible[visible.length - 1]?.id === msg.id;
@@ -80,10 +90,23 @@ export function createChatController(deps) {
       streaming: streaming && isLast && msg.role === 'assistant',
       isLast,
       speakingId,
-      ttsSupported: Voice.ttsSupported,
-      modelLabel: modelLabel(getSettings().model),
+      // A server voice (Fish Audio) can speak in browsers that have no
+      // device voices at all, so the control follows either of them.
+      ttsSupported: Voice.ttsSupported || Boolean(voiceLookup.value),
+      modelLabel: modelLabelFor(msg),
       onAction: handleAction,
     };
+  }
+
+  /**
+   * Which model answered. Before routing, that was the tier the user picked
+   * ("JARVIS Smart"); with routing it is the provider that actually replied,
+   * because claiming a model that did not answer would be a lie.
+   */
+  function modelLabelFor(msg) {
+    if (msg?.providerLabel && msg?.model) return `${msg.providerLabel} · ${msg.model}`;
+    if (msg?.provider) return `${msg.provider} · ${msg.model || ''}`.trim();
+    return modelLabel(getSettings().model);
   }
 
   /** Re-render a single message node in place (keeps scroll position stable). */
@@ -112,7 +135,7 @@ export function createChatController(deps) {
       const health = deps.getHealth?.();
       if (health && !health.ok) {
         note.hidden = false;
-        text.textContent = health.message || 'The TRALIX backend is not reachable.';
+        text.textContent = health.message || 'The JARVIS backend is not reachable.';
         btn.textContent = 'Set up';
         btn.onclick = () => deps.onOpenConnect?.();
       } else {
@@ -160,6 +183,10 @@ export function createChatController(deps) {
     const settings = getSettings();
     const chat = getChat();
     if (!chat || streaming) return;
+
+    // A new question replaces the answer being read out: two voices at once is
+    // not helpful, and the old reply is no longer what the user is asking about.
+    if (speakingId) stopSpeaking();
 
     const trimmed = String(text || '').trim();
     if (!trimmed) return;
@@ -244,9 +271,17 @@ export function createChatController(deps) {
         instructions,
         signal: controller.signal,
         onDelta,
+        onModel: (info) => {
+          botMsg.provider = info?.provider || '';
+          botMsg.providerLabel = info?.providerLabel || info?.provider || '';
+          botMsg.model = info?.model || botMsg.model;
+          botMsg.paid = Boolean(info?.paid);
+        },
       });
       full = result?.text ?? full;
       if (result?.model) botMsg.model = result.model;
+      if (result?.providerLabel) botMsg.providerLabel = result.providerLabel;
+      if (result?.provider) botMsg.provider = result.provider;
     } catch (err) {
       if (err?.name === 'AbortError' || err?.code === ERROR_CODES.aborted) {
         failure = null;                                  // deliberate stop
@@ -299,7 +334,10 @@ export function createChatController(deps) {
       deps.onRequestSucceeded?.();
     }
 
-    if (settings.voice.enabled && settings.voice.auto && Voice.ttsSupported) {
+    // Auto-speak must not depend on the device having its own voices: when the
+    // server has a provider configured, that is what speaks. Only stay silent
+    // when there is genuinely nothing to speak with.
+    if (settings.voice.enabled && settings.voice.auto && (Voice.ttsSupported || await serverVoice())) {
       speakMessage(botMsg, { auto: true });
     }
   }
@@ -445,7 +483,7 @@ export function createChatController(deps) {
     if (!summary) return;
     const saved = Store.addMemory(summary, { source: 'saved-response' });
     if (saved?.refused) {
-      toast('That looks sensitive, so TRALIX did not store it.', { tone: 'error' });
+      toast('That looks sensitive, so JARVIS did not store it.', { tone: 'error' });
       return;
     }
     if (!saved) {
@@ -479,40 +517,179 @@ export function createChatController(deps) {
   }
 
   /* ---------------------------------- voice ------------------------------- */
-  function speakMessage(msg, { auto = false } = {}) {
-    const settings = getSettings();
-    if (!Voice.ttsSupported) {
-      composerToast('Speech is not available in this browser.');
-      return;
+  /*
+   * Two engines, tried in this order:
+   *   1. the server's voice provider (Fish Audio) when the backend has one —
+   *      the key lives on the server, the browser only plays audio;
+   *   2. the device's own speech synthesis, which needs no key and no network.
+   * If the first is not configured or fails, the second takes over and nothing
+   * is claimed about which one spoke.
+   */
+  let serverAudio = null;
+  let stopCurrentChunk = null;        // settles the chunk that is playing
+
+  /** The server refuses text longer than 1200 characters (see server/tts.js). */
+  const SERVER_SPEECH_CHUNK = 1100;
+
+  async function serverVoice() {
+    const now = Date.now();
+    if (voiceLookup.value !== null
+      && now - voiceLookup.at < (voiceLookup.value ? VOICE_TTL_MS.configured : VOICE_TTL_MS.unconfigured)) {
+      return voiceLookup.value;
     }
+    try {
+      const status = await V2.voiceStatus({});
+      voiceLookup = { value: status?.configured ? status : false, at: now };
+    } catch {
+      voiceLookup = { value: false, at: now };
+    }
+    return voiceLookup.value;
+  }
+
+  /*
+   * Ask once whether the server can speak, so the Read-aloud control is offered
+   * for a server voice from the start instead of only after the first reply.
+   * Runs at most once per (re)configuration.
+   */
+  let voicePrimed = false;
+  async function primeVoice() {
+    if (voicePrimed) return;
+    voicePrimed = true;
+    const before = Boolean(voiceLookup.value);
+    const now = await serverVoice();
+    if (Boolean(now) !== before) render();
+  }
+
+  // Settings → Voice adds or removes a key: drop the cached answer at once.
+  window.addEventListener('jarvis:voice-changed', () => {
+    voiceLookup = { value: null, at: 0 };
+    if (getSettings().voice.enabled) { voicePrimed = false; primeVoice(); }
+  });
+
+  /**
+   * Speak one piece of text through the server provider.
+   * Resolves `{ stopped: true }` when Stop interrupts it instead of hanging.
+   */
+  function playServerSpeech(text, { speed = 1 }) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (value) => {
+        if (settled) return;
+        settled = true;
+        stopCurrentChunk = null;
+        try { serverAudio?.pause(); } catch { /* already stopped */ }
+        serverAudio = null;
+        resolve(value);
+      };
+
+      // Stop must be able to end a chunk: pausing alone never fires 'ended',
+      // which would leave this promise pending for the rest of the session.
+      stopCurrentChunk = () => settle({ stopped: true });
+
+      V2.speak(text, { speed }).then(({ url, revoke }) => {
+        if (settled) { revoke?.(); return; }
+        serverAudio = new Audio(url);
+        serverAudio.addEventListener('ended', () => { revoke?.(); settle({ stopped: false }); }, { once: true });
+        serverAudio.addEventListener('error', () => {
+          revoke?.();
+          if (settled) return;
+          settled = true;
+          stopCurrentChunk = null;
+          serverAudio = null;
+          reject(new Error('The spoken audio could not be played.'));
+        }, { once: true });
+        serverAudio.play().catch((err) => {
+          revoke?.();
+          if (settled) return;
+          settled = true;
+          stopCurrentChunk = null;
+          serverAudio = null;
+          reject(err instanceof Error ? err : new Error('Playback was blocked by the browser.'));
+        });
+      }).catch(reject);
+    });
+  }
+
+  async function speakMessage(msg, { auto = false } = {}) {
+    const settings = getSettings();
     const text = stripMarkdown(msg.text);
     if (!text) return;
 
-    speakingId = msg.id;
-    onSpeakingChange(speakingId);
-    refreshNode(msg);
-    setStatus('speaking');
+    const clear = () => {
+      if (speakingId === msg.id) {
+        speakingId = null;
+        onSpeakingChange(null);
+        const chat = getChat();
+        const current = chat?.messages.find(m => m.id === msg.id);
+        if (current) refreshNode(current);
+      }
+      setStatus('idle');
+    };
 
+    const begin = () => {
+      speakingId = msg.id;
+      onSpeakingChange(speakingId);
+      refreshNode(msg);
+      setStatus('speaking');
+    };
+
+    const voice = await serverVoice();
+    if (voice) {
+      // The server voice has its own speed; the device rate applies only to
+      // the browser's own speech synthesis below.
+      const speed = Number(voice.speed) || Number(settings.voice.rate) || 1;
+      begin();
+      let spoken = 0;
+      try {
+        // A long reply is spoken in sentence-sized pieces: sending it whole
+        // would be refused for length and would silently switch voices
+        // halfway through the answer.
+        for (const chunk of Voice.chunkText(text, SERVER_SPEECH_CHUNK)) {
+          if (speakingId !== msg.id) break;                 // Stop was pressed
+          const { stopped } = await playServerSpeech(chunk, { speed });
+          if (stopped) break;
+          spoken += 1;
+        }
+        if (speakingId === msg.id) clear();
+        if (!auto) haptic(4);
+        return;
+      } catch (error) {
+        // Ask again next time: a transient failure is not a configuration.
+        voiceLookup = { value: null, at: 0 };
+        if (spoken > 0) {
+          // Something was already said — restarting in a different voice would
+          // be worse than saying plainly that the audio stopped early.
+          toast(`Spoken audio stopped after ${spoken} part${spoken === 1 ? '' : 's'}: ${error?.message || 'unknown error'}`, { tone: 'error', ms: 4200 });
+          clear();
+          return;
+        }
+      }
+    }
+
+    if (!Voice.ttsSupported) {
+      composerToast('Speech is not available in this browser.');
+      clear();
+      return;
+    }
+
+    begin();
     Voice.speak(text, {
       voiceURI: settings.voice.voiceURI,
       rate: settings.voice.rate,
       pitch: settings.voice.pitch,
-      onEnd: () => {
-        if (speakingId === msg.id) {
-          speakingId = null;
-          onSpeakingChange(null);
-          const chat = getChat();
-          const current = chat?.messages.find(m => m.id === msg.id);
-          if (current) refreshNode(current);
-          setStatus('idle');
-        }
-      },
+      onEnd: clear,
     });
     if (!auto) haptic(4);
   }
 
   function stopSpeaking() {
     Voice.stopSpeaking();
+    // Settle the chunk that is playing first: pausing alone never ends it.
+    stopCurrentChunk?.();
+    if (serverAudio) {
+      try { serverAudio.pause(); } catch { /* nothing to stop */ }
+      serverAudio = null;
+    }
     speakingId = null;
     onSpeakingChange(null);
     render();
@@ -524,6 +701,10 @@ export function createChatController(deps) {
   }
 
   /* --------------------------------- public ------------------------------- */
+
+  // Find out whether the server can speak, without waiting for a reply.
+  if (getSettings().voice.enabled) primeVoice();
+
   return {
     render,
     newChat,

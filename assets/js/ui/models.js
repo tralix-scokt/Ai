@@ -74,7 +74,7 @@ export function createModelPicker({ getSettings, onSelect = () => {}, getHealth 
     const tier = modelById(active);
     noteEl.textContent = settings.advanced.devMode
       ? `Resolves to: ${resolvedSummary(active)}`
-      : 'Model names are internal — TRALIX picks the right provider model for the job.';
+      : 'Model names are internal — JARVIS picks the right provider model for the job.';
 
     renderCapabilities(tier);
   }

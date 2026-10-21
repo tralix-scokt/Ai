@@ -1,0 +1,18 @@
+# Files that are never part of a Vercel deployment.
+# server/ must stay: api/[...path].js imports the backend from there.
+
+# Tests, tooling and docs — only needed locally and in CI.
+tests/
+tools/
+docs/
+
+# Local runtime state (settings, task history, stored keys).
+data/
+
+# Environment files: real keys belong in the Vercel dashboard, never uploaded.
+.env
+.env.*
+server/.env
+
+.github/
+*.log

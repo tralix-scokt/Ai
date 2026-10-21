@@ -11,12 +11,12 @@ import { APP } from './config.js';
 export const PERSONALITIES = [
   {
     id: 'tralix',
-    label: 'TRALIX',
+    label: 'JARVIS',
     hint: 'Default voice — precise, calm, professional',
   },
   {
     id: 'jarvis',
-    label: 'JARVIS',
+    label: 'JARVIS (formal)',
     hint: 'Optional mode — formal, dry-witted, addresses you as “sir”',
   },
   {

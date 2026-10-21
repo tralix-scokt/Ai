@@ -68,7 +68,7 @@ export async function errorFromResponse(res) {
   if (res.status === 404) {
     return new TralixError(ERROR_CODES.invalid_config, {
       status: 404,
-      detail: 'backend endpoint not found — is the TRALIX backend deployed?',
+      detail: 'backend endpoint not found — is the JARVIS backend deployed?',
     });
   }
   if (res.status === 401 || res.status === 403) {

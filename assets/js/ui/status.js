@@ -13,8 +13,8 @@ export const STATES = ['idle', 'listening', 'thinking', 'generating', 'speaking'
 const LABELS = {
   idle: 'Idle',
   listening: 'Listening…',
-  thinking: 'TRALIX is thinking…',
-  generating: 'TRALIX is generating…',
+  thinking: 'JARVIS is thinking…',
+  generating: 'JARVIS is generating…',
   speaking: 'Speaking…',
   error: 'Something went wrong',
 };
@@ -25,7 +25,7 @@ const nodes = new Set();
 function paint(state, label) {
   for (const node of nodes) {
     node.dataset.state = state;
-    node.setAttribute('aria-label', `TRALIX status: ${label || LABELS[state]}`);
+    node.setAttribute('aria-label', `JARVIS status: ${label || LABELS[state]}`);
   }
   const labelEl = document.getElementById('statusSidebarLabel');
   if (labelEl) labelEl.textContent = label || LABELS[state];

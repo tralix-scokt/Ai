@@ -29,12 +29,12 @@ const svg = (path, cls = '') => `<svg viewBox="0 0 24 24" aria-hidden="true" cla
 function headHtml(modelLabel = '') {
   return `<div class="msg-head">
     <span class="msg-avatar" aria-hidden="true">T</span>
-    <span class="msg-name">TRALIX</span>
+    <span class="msg-name">JARVIS</span>
     ${modelLabel ? `<span class="msg-model">· ${escapeHtml(modelLabel)}</span>` : ''}
   </div>`;
 }
 
-export function typingHtml(label = 'TRALIX is thinking…') {
+export function typingHtml(label = 'JARVIS is thinking…') {
   return `<div class="typing"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>${escapeHtml(label)}</div>`;
 }
 
@@ -151,7 +151,7 @@ function buildErrorActions(node, msg, ctx) {
     bar.appendChild(actionButton({
       label: 'Connection',
       icon: ICON.link,
-      title: 'Check the TRALIX backend connection',
+      title: 'Check the JARVIS backend connection',
       onClick: () => ctx.onAction?.('fix-connection', msg),
     }));
   }
@@ -285,5 +285,5 @@ export function dayDivider(label) {
 }
 
 export function messageMeta(msg) {
-  return `${msg.role === 'assistant' ? 'TRALIX' : 'You'} · ${relTime(msg.ts)}`;
+  return `${msg.role === 'assistant' ? 'JARVIS' : 'You'} · ${relTime(msg.ts)}`;
 }

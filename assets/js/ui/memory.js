@@ -28,7 +28,7 @@ export function createMemoryManager(container, { onChange = () => {} } = {}) {
     const add = document.createElement('div');
     add.className = 'mem-add';
     add.innerHTML = `
-      <input type="text" placeholder="Add something TRALIX should remember" autocomplete="off" maxlength="200">
+      <input type="text" placeholder="Add something JARVIS should remember" autocomplete="off" maxlength="200">
       <button type="button" class="btn-ghost">Add</button>`;
     const input = add.querySelector('input');
     const button = add.querySelector('button');
@@ -155,7 +155,7 @@ export function createMemoryManager(container, { onChange = () => {} } = {}) {
     async clearAll() {
       const ok = await confirmDialog(
         'Clear all memories?',
-        'TRALIX will forget everything it has saved about you. This cannot be undone.',
+        'JARVIS will forget everything it has saved about you. This cannot be undone.',
         'Clear all',
       );
       if (!ok) return false;

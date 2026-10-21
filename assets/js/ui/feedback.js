@@ -63,12 +63,25 @@ export function initToast() {
 
 /* -------------------------------- confirm -------------------------------- */
 /**
- * @param {string} title
- * @param {string} body
+ * Ask before something consequential.
+ *
+ * Two call styles, because both exist in the codebase:
+ *   confirmDialog('Title', 'Body', 'Confirm')
+ *   confirmDialog({ title, body, confirmLabel, danger })
+ *
+ * @param {string|object} title
+ * @param {string} [body]
  * @param {string} [yesLabel]
  * @returns {Promise<boolean>}
  */
 export function confirmDialog(title, body, yesLabel = 'Yes') {
+  if (title && typeof title === 'object') {
+    const opts = title;
+    title = opts.title || '';
+    body = opts.body || '';
+    yesLabel = opts.yesLabel || opts.confirmLabel || 'Yes';
+    // `danger` is styling only: the confirm button is already the danger one.
+  }
   return new Promise(resolve => {
     const back = $('#confirmSheet');
     const t = $('#confirmTitle');

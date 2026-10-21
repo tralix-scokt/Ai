@@ -1,28 +1,38 @@
 {
-  "name": "tralix-ai",
+  "name": "jarvis-studio",
   "version": "2.0.0",
   "private": true,
-  "description": "TRALIX AI \u2014 intelligent AI assistant. Static PWA frontend plus a secure OpenAI-backed API layer.",
+  "description": "JARVIS STUDIO \u2014 an AI coding workspace: Free-first multi-model routing, GitHub task automation, isolated checks and a voice-enabled assistant.",
   "type": "module",
   "scripts": {
     "test": "node tests/logic.test.mjs",
     "test:dom": "node tests/dom.test.mjs",
+    "test:backend": "node tests/backend.test.mjs",
+    "test:routing": "node tests/routing.test.mjs",
+    "test:runner": "node tests/runner.test.mjs",
+    "test:tasks": "node tests/tasks.test.mjs",
+    "test:diff": "node tests/diff.test.mjs",
+    "test:server": "node tests/backend.test.mjs && node tests/routing.test.mjs && node tests/runner.test.mjs && node tests/tasks.test.mjs && node tests/voice.test.mjs && node tests/diff.test.mjs",
     "check": "node tools/check.mjs",
-    "verify": "npm run check && npm run test && npm run test:backend && npm run test:dom",
+    "verify": "npm run check && npm run test && npm run test:server && npm run test:vercel && npm run test:dom && npm run test:studio",
     "serve": "node server/node.js --static",
     "backend": "node server/node.js",
-    "test:backend": "node tests/backend.test.mjs",
-    "fake:openai": "node tests/fake-openai.mjs 8799"
+    "fake:openai": "node tests/fake-openai.mjs 8799",
+    "fake:gemini": "node tests/fake-gemini.mjs 8801",
+    "test:studio": "node tests/studio.test.mjs",
+    "test:voice": "node tests/voice.test.mjs",
+    "test:vercel": "node tests/vercel.test.mjs"
   },
   "engines": {
     "node": ">=18"
   },
   "keywords": [
-    "tralix",
-    "ai-assistant",
+    "jarvis",
+    "ai-coding-assistant",
     "pwa",
-    "openai",
-    "responses-api"
+    "github",
+    "multi-provider",
+    "free-first"
   ],
   "license": "UNLICENSED",
   "devDependencies": {
