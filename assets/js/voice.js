@@ -66,6 +66,7 @@ export class Listener {
     this.manualStop = false;
     this.finalText = '';
     this._emitted = false;
+    this._errored = false;
     this._spawn();
     return true;
   }
@@ -103,7 +104,12 @@ export class Listener {
       // 'no-speech' / 'aborted' happen constantly on iOS — treat as soft
       if (code === 'no-speech' || code === 'aborted') return;
 
+      // 'no-speech' / 'aborted' happen constantly on iOS — treat as soft
       this.active = false;
+      this._errored = true;
+      // The browser fires onend after an error. Swallow it: reporting an empty
+      // result would add "did not catch that" on top of the real error.
+      this._emitted = true;
       setVoiceState('error');
 
       const messages = {
@@ -114,6 +120,9 @@ export class Listener {
         'language-not-supported': 'That language is not supported for dictation.',
       };
       this.onError(messages[code] || `Microphone error: ${code}`);
+      // The failure has been surfaced; the indicator must not stay in a
+      // failure state until the next voice action clears it by accident.
+      setVoiceState('idle');
     };
 
     rec.onend = () => {

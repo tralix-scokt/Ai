@@ -131,6 +131,49 @@ class FakeAudio {
 globalThis.Audio = FakeAudio;
 window.Audio = FakeAudio;
 
+/*
+ * jsdom implements no speech recognition, so the microphone is driven through a
+ * stand-in that behaves like the Web Speech API: it starts, reports results and
+ * can fail the way a blocked microphone fails.
+ */
+class FakeSpeechRecognition {
+  static instances = [];
+  constructor() {
+    this.lang = '';
+    this.interimResults = false;
+    this.continuous = false;
+    this.maxAlternatives = 1;
+    this.started = 0;
+    this.stopped = 0;
+    FakeSpeechRecognition.instances.push(this);
+  }
+  start() {
+    this.started += 1;
+    setTimeout(() => this.onstart?.(), 0);
+  }
+  stop() {
+    this.stopped += 1;
+    setTimeout(() => this.onend?.(), 0);
+  }
+  abort() {
+    this.stopped += 1;
+    setTimeout(() => this.onend?.(), 0);
+  }
+  /** Test helper: the user said something and it is final. */
+  say(text) {
+    // A real result is array-like with an isFinal flag: [ { transcript }, … ]
+    const result = [{ transcript: text }];
+    result.isFinal = true;
+    this.onresult?.({ resultIndex: 0, results: [result] });
+  }
+  /** Test helper: recognition failed the way a real one does. */
+  failWith(error) {
+    this.onerror?.({ error });
+  }
+}
+window.SpeechRecognition = FakeSpeechRecognition;
+globalThis.SpeechRecognition = FakeSpeechRecognition;
+
 /* ------------------------------ backend.json ------------------------------ */
 // The harness answers ./backend.json so the deployed-frontend path is testable.
 let backendJson = { url: '' };
@@ -858,6 +901,70 @@ console.log('\n— spoken replies —');
   t('auto-speak can be turned off again', store.loadSettings().voice.auto === false);
   voiceMode = 'off';
   replyLength = 'short';
+}
+
+console.log('\n— microphone —');
+{
+  const mic = $('#btnMic');
+  const tap = () => mic.dispatchEvent(new window.Event('click', { bubbles: true }));
+  const live = () => FakeSpeechRecognition.instances.at(-1);
+  const reset = () => { FakeSpeechRecognition.instances.length = 0; };
+  const thread = () => $('#chatScroll')?.textContent || '';
+
+  reset();
+  tap();
+  await flush(60);
+  t('the microphone starts recognising', Boolean(live()) && live().started >= 1);
+  t('the interface says it is listening', $('#voiceState').hidden === false);
+  t('the mic button reports that it is recording', mic.getAttribute('aria-pressed') === 'true');
+
+  live().say('deploy the api');
+  await flush(30);
+  t('speech is shown while it is recognised',
+    ($('#voiceLabel').textContent || '').includes('deploy the api'), $('#voiceLabel').textContent);
+
+  tap();                                   // tap again to stop
+  await flush(150);
+  t('the listening bar is dismissed when the mic stops', $('#voiceState').hidden === true);
+  t('the mic button stops reporting recording', mic.getAttribute('aria-pressed') === 'false');
+  t('the dictation was sent as a message', /deploy the api/.test(thread()));
+
+  // A blocked microphone: the failure is reported and nothing is left stuck.
+  reset();
+  tap();
+  await flush(60);
+  live().failWith('not-allowed');
+  await flush(60);
+  t('a blocked microphone is reported, not hidden',
+    /Microphone access is blocked/.test($('#toast')?.textContent || ''), ($('#toast')?.textContent || '').slice(0, 60));
+  t('the listening bar is dismissed after an error', $('#voiceState').hidden === true);
+  t('the mic button is not left in the recording state', mic.getAttribute('aria-pressed') === 'false');
+  t('an error does not also claim nothing was heard',
+    !/Did not catch that/.test($('#toast')?.textContent || ''), ($('#toast')?.textContent || '').slice(0, 60));
+
+  // The next tap must start listening — not just clear a stuck flag.
+  reset();
+  tap();
+  await flush(60);
+  t('the next tap starts listening again', Boolean(live()) && live().started >= 1);
+  tap();                                   // stop it again, through the UI
+  await flush(120);
+  t('stopping through the mic button clears the recording state',
+    mic.getAttribute('aria-pressed') === 'false');
+
+  // Dictation adds to what the user had already typed; it must not replace it.
+  reset();
+  $('#composer-input').value = 'explain this:';
+  $('#composer-input').dispatchEvent(new window.Event('input', { bubbles: true }));
+  tap();
+  await flush(60);
+  live().say('why is the build red');
+  await flush(30);
+  tap();
+  await flush(150);
+  t('dictation is added to an existing draft, not substituted for it',
+    /explain this:/.test(thread()) && /why is the build red/.test(thread()),
+    thread().slice(-120));
 }
 
 console.log('\n— errors during the run —');

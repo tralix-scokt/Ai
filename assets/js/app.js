@@ -92,18 +92,22 @@ const listener = new Voice.Listener({
   },
   onError: (message) => {
     toast(message, { tone: 'error', ms: 4200 });
-    setVoiceBar(null);
-    setStudioStatus('idle');
+    // Recognition can die on its own (permission denied, no microphone, a
+    // network hiccup). Clear the UI here too: otherwise the button stays stuck
+    // in its recording state and the next tap only unsticks it.
+    endListening();
   },
   onStart: () => {
     setVoiceBar({ state: 'listening', label: 'Listening…', hint: 'tap the mic again to stop' });
   },
   onEnd: (finalText) => {
-    setVoiceBar(null);
-    setStudioStatus('idle');
-    composer.setRecording(false);
-    if (finalText && finalText.trim().length > 1) {
-      composer.setValue(finalText.trim(), { focus: false });
+    endListening();
+    const said = String(finalText || '').trim();
+    if (said.length > 1) {
+      // Dictation adds to whatever the user had already drafted — it must never
+      // replace it, because that text is not recoverable.
+      if (composer.value.trim()) composer.append(said);
+      else composer.setValue(said, { focus: false });
       composer.el.form.requestSubmit();
     } else {
       toast('Did not catch that — try again', { ms: 2000 });
@@ -113,16 +117,21 @@ const listener = new Voice.Listener({
 
 let listening = false;
 
+/** Leave the listening state: bar, button, orb and flag all at once. */
+function endListening() {
+  listening = false;
+  composer.setRecording(false);
+  setVoiceBar(null);
+  setStudioStatus('idle');
+}
+
 function toggleListening() {
   if (!Voice.sttSupported) {
     toast('Voice input needs Safari on iPhone or Chrome on Android.', { ms: 3600, tone: 'error' });
     return;
   }
   if (listening) {
-    listener.stop();
-    listening = false;
-    composer.setRecording(false);
-    setVoiceBar(null);
+    listener.stop();          // onEnd clears the rest of the state
     return;
   }
   Voice.stopSpeaking();

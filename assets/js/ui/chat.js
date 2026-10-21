@@ -184,6 +184,10 @@ export function createChatController(deps) {
     const chat = getChat();
     if (!chat || streaming) return;
 
+    // A new question replaces the answer being read out: two voices at once is
+    // not helpful, and the old reply is no longer what the user is asking about.
+    if (speakingId) stopSpeaking();
+
     const trimmed = String(text || '').trim();
     if (!trimmed) return;
     if (trimmed.length > LIMITS.maxInputChars) {
